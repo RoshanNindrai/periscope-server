@@ -56,13 +56,18 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Create Elastic Beanstalk storage location (if needed)
+        run: |
+          aws elasticbeanstalk create-storage-location --region us-east-1 || echo "Storage location may already exist"
+        continue-on-error: true
+
       - name: Deploy to Elastic Beanstalk
         uses: einaregilsson/beanstalk-deploy@v22
         with:
           aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: periscope-server
-          environment_name: periscope-server-prod
+          environment_name: periscope-server-env
           version_label: ${{ github.sha }}-${{ github.run_number }}
           region: us-east-1
           deployment_package: deploy.zip
