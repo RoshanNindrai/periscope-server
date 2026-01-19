@@ -1,18 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# Point EB's web root to Laravel's /public
-# This is a fallback in case .ebextensions document_root config doesn't work on AL2023
-# Primary method: .ebextensions/03-document-root.config sets document_root: /public
+# EB expects /var/www/html/public to exist.
+# So /var/www/html must point to the Laravel project root.
+# EB's nginx/php config appends /public internally.
 
 if [ -e /var/www/html ]; then
   rm -rf /var/www/html
 fi
 
-ln -sfn /var/app/current/public /var/www/html
+ln -sfn /var/app/current /var/www/html
 
-# Sanity check
-test -f /var/www/html/index.php
+# Sanity check - EB looks for /var/www/html/public/index.php
+test -f /var/www/html/public/index.php
 
 # Reload nginx
 systemctl reload nginx || systemctl restart nginx
