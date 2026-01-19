@@ -48,14 +48,23 @@ class VerifyEmailNotification extends Notification implements ShouldQueue
         $hash = sha1($notifiable->getEmailForVerification());
         
         // Create signed URL parameters
+        $id = (string) $notifiable->getKey();
+        $expiresTimestamp = (string) $expires->timestamp;
+        
         $params = [
-            'id' => $notifiable->getKey(),
+            'id' => $id,
             'hash' => $hash,
-            'expires' => $expires->timestamp,
+            'expires' => $expiresTimestamp,
         ];
         
-        // Generate signature using Laravel's signing
-        $signature = hash_hmac('sha256', $notifiable->getKey() . '|' . $hash . '|' . $expires->timestamp, config('app.key'));
+        // Get and decode APP_KEY (Laravel stores it as base64:...)
+        $appKey = config('app.key');
+        if (strpos($appKey, 'base64:') === 0) {
+            $appKey = base64_decode(substr($appKey, 7));
+        }
+        
+        // Generate signature using consistent string types
+        $signature = hash_hmac('sha256', $id . '|' . $hash . '|' . $expiresTimestamp, $appKey);
         $params['signature'] = $signature;
         
         // Return frontend URL that will call the API endpoint

@@ -77,16 +77,10 @@ class AuthModuleServiceProvider extends ServiceProvider
                 });
 
                 $verifyEmailLimit = config('auth-module.rate_limits.verify_email', '5,1');
-                $lockAccountLimit = config('auth-module.rate_limits.lock_account', '5,1');
                 
                 Route::middleware("throttle:{$verifyEmailLimit}")->group(function () {
                     Route::post('/verify-email', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'verifyEmail'])
                         ->name('verify-email');
-                });
-                
-                Route::middleware("throttle:{$lockAccountLimit}")->group(function () {
-                    Route::post('/lock-account', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'lockAccount'])
-                        ->name('lock-account');
                 });
 
                 Route::middleware('auth:sanctum')->group(function () {

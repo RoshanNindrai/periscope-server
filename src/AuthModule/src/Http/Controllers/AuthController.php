@@ -437,9 +437,34 @@ class AuthController extends Controller
         }
 
         try {
-            // Verify signature
-            $expectedSignature = hash_hmac('sha256', $request->id . '|' . $request->hash . '|' . $request->expires, config('app.key'));
+            // Verify signature - ensure consistent string types
+            $id = (string) $request->id;
+            $hash = (string) $request->hash;
+            $expires = (string) $request->expires;
+            
+            // Build the signature payload exactly as it was generated
+            $signaturePayload = $id . '|' . $hash . '|' . $expires;
+            $appKey = config('app.key');
+            
+            // Ensure APP_KEY is properly decoded (Laravel stores it as base64:...)
+            if (strpos($appKey, 'base64:') === 0) {
+                $appKey = base64_decode(substr($appKey, 7));
+            }
+            
+            $expectedSignature = hash_hmac('sha256', $signaturePayload, $appKey);
+            
             if (!hash_equals($expectedSignature, $request->signature)) {
+                // Log debug info for troubleshooting (remove in production)
+                \Log::warning('Email verification signature mismatch', [
+                    'provided_signature' => $request->signature,
+                    'expected_signature' => $expectedSignature,
+                    'payload' => $signaturePayload,
+                    'id' => $id,
+                    'hash' => $hash,
+                    'expires' => $expires,
+                    'app_key_prefix' => substr($appKey, 0, 10) . '...',
+                ]);
+                
                 $error = AuthErrorCode::INVALID_VERIFICATION_SIGNATURE;
                 return response()->json([
                     'status' => $error->value,
@@ -597,8 +622,18 @@ class AuthController extends Controller
         }
 
         try {
-            // Verify signature
-            $expectedSignature = hash_hmac('sha256', $request->id . '|' . $request->token . '|' . $request->expires, config('app.key'));
+            // Verify signature - ensure consistent string types
+            $id = (string) $request->id;
+            $token = (string) $request->token;
+            $expires = (string) $request->expires;
+            
+            // Get and decode APP_KEY (Laravel stores it as base64:...)
+            $appKey = config('app.key');
+            if (strpos($appKey, 'base64:') === 0) {
+                $appKey = base64_decode(substr($appKey, 7));
+            }
+            
+            $expectedSignature = hash_hmac('sha256', $id . '|' . $token . '|' . $expires, $appKey);
             if (!hash_equals($expectedSignature, $request->signature)) {
                 $error = AuthErrorCode::INVALID_LOCK_SIGNATURE;
                 return response()->json([

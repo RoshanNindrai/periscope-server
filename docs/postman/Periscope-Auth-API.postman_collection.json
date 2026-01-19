@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "periscope-auth-module",
 		"name": "Periscope Auth Module API",
-		"description": "Complete authentication API collection for testing email/password authentication, password reset, email verification, and account locking with enum-based responses",
+		"description": "Mobile app authentication API collection for email/password authentication, password reset, and email verification with enum-based responses",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -151,61 +151,6 @@
 							]
 						},
 						"description": "Login with email and password. Returns authentication token.\n\n**Expected Response State**: `LOGGED_IN`\n\n**Error States**:\n- `ACCOUNT_LOCKED` (403) - Account is locked\n- `LOGIN_FAILED` (500) - Server error"
-					},
-					"response": []
-				},
-				{
-					"name": "Login - Invalid Credentials",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 422\", function () {",
-									"    pm.response.to.have.status(422);",
-									"});",
-									"",
-									"pm.test(\"Response has errors field (validation)\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('errors');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"email\": \"wrong@example.com\",\n    \"password\": \"wrongpassword\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/api/login",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"login"
-							]
-						},
-						"description": "Test login with invalid credentials. Should return validation error."
 					},
 					"response": []
 				},
@@ -439,134 +384,12 @@
 								"reset-password"
 							]
 						},
-						"description": "Reset password with token from email. After successful reset, user receives confirmation email with lock account option.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_TOKEN` (422) - Invalid or expired token\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get reset_token from storage/logs/laravel.log after calling Forgot Password."
+						"description": "Reset password with token from email.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_TOKEN` (422) - Invalid or expired token\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get reset_token from the password reset email."
 					},
 					"response": []
 				},
-				{
-					"name": "Reset Password - Invalid Token",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 422\", function () {",
-									"    pm.response.to.have.status(422);",
-									"});",
-									"",
-									"pm.test(\"Response has error field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('error');",
-									"    pm.expect(jsonData.error).to.be.oneOf(['INVALID_RESET_TOKEN', 'INVALID_USER']);",
-									"});",
-									"",
-									"pm.test(\"Response has message field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('message');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"email\": \"{{email}}\",\n    \"token\": \"invalid_token_12345\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/api/reset-password",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"reset-password"
-							]
-						},
-						"description": "Test password reset with invalid token. Should return error enum."
-					},
-					"response": []
-				},
-				{
-					"name": "Lock Account (Unauthorized Reset)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 200\", function () {",
-									"    pm.response.to.have.status(200);",
-									"});",
-									"",
-									"pm.test(\"Response has state field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('state');",
-									"    pm.expect(jsonData.state).to.be.oneOf(['ACCOUNT_LOCKED', 'ACCOUNT_ALREADY_LOCKED']);",
-									"});",
-									"",
-									"pm.test(\"Response has message field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('message');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"id\": \"{{user_id}}\",\n    \"token\": \"{{lock_token}}\",\n    \"expires\": \"{{lock_expires}}\",\n    \"signature\": \"{{lock_signature}}\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/api/lock-account",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"lock-account"
-							]
-						},
-						"description": "Lock account if password reset was unauthorized. This endpoint is called from the email link sent after password reset.\n\n**Expected Response States**:\n- `ACCOUNT_LOCKED` - Account successfully locked\n- `ACCOUNT_ALREADY_LOCKED` - Account was already locked\n\n**Error States**:\n- `INVALID_LOCK_SIGNATURE` (422) - Invalid signature\n- `EXPIRED_LOCK_LINK` (422) - Link expired\n- `USER_NOT_FOUND` (404) - User not found\n- `ACCOUNT_LOCK_FAILED` (500) - Server error\n\n**Note**: Extract id, token, expires, and signature from the lock account email in storage/logs/laravel.log"
-					},
-					"response": []
-				}
 			],
-			"description": "Password reset flow with account locking feature"
+			"description": "Password reset flow"
 		},
 		{
 			"name": "Email Verification",
@@ -629,74 +452,6 @@
 							]
 						},
 						"description": "Verify email address using token from verification email.\n\n**Expected Response States**:\n- `EMAIL_VERIFIED` - Email successfully verified\n- `EMAIL_ALREADY_VERIFIED` - Email was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_SIGNATURE` (422) - Invalid signature\n- `EXPIRED_VERIFICATION_LINK` (422) - Link expired\n- `INVALID_VERIFICATION_LINK` (422) - Invalid link\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_EMAIL` (500) - Server error\n- `EMAIL_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract id, hash, expires, and signature from the verification email in storage/logs/laravel.log"
-					},
-					"response": []
-				},
-				{
-					"name": "Verify Email - Invalid Signature",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Status code is 422\", function () {",
-									"    pm.response.to.have.status(422);",
-									"});",
-									"",
-									"pm.test(\"Response has error field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('error');",
-									"    pm.expect(jsonData.error).to.be.oneOf([",
-									"        'INVALID_VERIFICATION_SIGNATURE',",
-									"        'EXPIRED_VERIFICATION_LINK',",
-									"        'INVALID_VERIFICATION_LINK',",
-									"        'USER_NOT_FOUND'",
-									"        'UNABLE_TO_VERIFY_EMAIL'",
-									"        'EMAIL_VERIFICATION_FAILED'",
-									"    ]);",
-									"});",
-									"",
-									"pm.test(\"Response has message field\", function () {",
-									"    const jsonData = pm.response.json();",
-									"    pm.expect(jsonData).to.have.property('message');",
-									"});"
-								],
-								"type": "text/javascript"
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							},
-							{
-								"key": "Accept",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"id\": 1,\n    \"hash\": \"invalid_hash\",\n    \"expires\": 9999999999,\n    \"signature\": \"invalid_signature\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{base_url}}/api/verify-email",
-							"host": [
-								"{{base_url}}"
-							],
-							"path": [
-								"api",
-								"verify-email"
-							]
-						},
-						"description": "Test email verification with invalid signature. Should return error enum."
 					},
 					"response": []
 				},
@@ -851,21 +606,6 @@
 		},
 		{
 			"key": "reset_token",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "lock_token",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "lock_expires",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "lock_signature",
 			"value": "",
 			"type": "string"
 		},

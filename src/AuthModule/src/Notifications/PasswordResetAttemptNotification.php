@@ -54,13 +54,22 @@ class PasswordResetAttemptNotification extends Notification implements ShouldQue
     {
         $frontendUrl = config('auth-module.frontend_url', env('FRONTEND_URL', env('APP_URL', 'http://localhost')));
         
-        $expires = now()->addMinutes(15)->timestamp;
-        $signature = hash_hmac('sha256', $notifiable->getKey() . '|' . $this->lockToken . '|' . $expires, config('app.key'));
+        // Ensure consistent string types for signature
+        $id = (string) $notifiable->getKey();
+        $expiresTimestamp = (string) now()->addMinutes(15)->timestamp;
+        
+        // Get and decode APP_KEY (Laravel stores it as base64:...)
+        $appKey = config('app.key');
+        if (strpos($appKey, 'base64:') === 0) {
+            $appKey = base64_decode(substr($appKey, 7));
+        }
+        
+        $signature = hash_hmac('sha256', $id . '|' . $this->lockToken . '|' . $expiresTimestamp, $appKey);
         
         return $frontendUrl . '/lock-account?' . http_build_query([
-            'id' => $notifiable->getKey(),
+            'id' => $id,
             'token' => $this->lockToken,
-            'expires' => $expires,
+            'expires' => $expiresTimestamp,
             'signature' => $signature,
         ]);
     }
