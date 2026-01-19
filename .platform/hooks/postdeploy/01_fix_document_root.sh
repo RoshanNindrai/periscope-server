@@ -41,7 +41,7 @@ else
     echo "$(date): WARNING - index.php not found in public directory" >> "$LOG_FILE"
 fi
 
-# Restart nginx to pick up changes
+# Restart nginx to pick up symlink changes
 echo "$(date): Reloading nginx" >> "$LOG_FILE"
 systemctl reload nginx || systemctl restart nginx || true
 
