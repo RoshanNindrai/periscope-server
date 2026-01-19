@@ -387,7 +387,7 @@
 						"description": "Reset password with token from email.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_TOKEN` (422) - Invalid or expired token\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get reset_token from the password reset email."
 					},
 					"response": []
-				},
+				}
 			],
 			"description": "Password reset flow"
 		},
