@@ -19,7 +19,7 @@ Laravel API server with authentication module.
 
 - PHP ^8.2
 - Composer
-- SQLite (or MySQL/PostgreSQL)
+- MySQL (or SQLite for local development)
 
 ### Installation
 
@@ -57,8 +57,6 @@ Import the Postman collection for API testing:
 - Collection: `docs/postman/Periscope-Auth-API.postman_collection.json`
 - Environment: `docs/postman/Periscope-Auth-Environment.postman_environment.json`
 
-See `docs/postman/README.md` for detailed import instructions.
-
 ### Environment Setup for Testing
 
 Update your `.env` file:
@@ -90,6 +88,9 @@ All endpoints return enum-based responses with a `status` field.
 - `POST /api/verify-email` - Verify email address
 - `POST /api/resend-verification-email` - Resend verification (requires auth)
 
+### Health Check
+- `GET /api/health` - Server health check
+
 ## Response Format
 
 **Success Response:**
@@ -115,7 +116,14 @@ All endpoints return enum-based responses with a `status` field.
 
 The authentication module is located in `src/AuthModule/` and can be used as a standalone Laravel package.
 
-See `src/AuthModule/README.md` for package documentation.
+## Deployment
+
+The application is configured for AWS Elastic Beanstalk deployment with:
+- Automatic .env configuration
+- Queue worker auto-start
+- RDS database integration
+- SQS queue processing
+- SES email sending
 
 ## License
 
