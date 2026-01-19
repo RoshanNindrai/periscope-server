@@ -68,9 +68,10 @@ jobs:
           aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           application_name: periscope-server
           environment_name: periscope-server-env
-          version_label: ${{ github.sha }}-${{ github.run_number }}
+          version_label: ${{ github.sha }}-${{ github.run_number }}-${{ github.run_attempt }}
           region: us-east-1
           deployment_package: deploy.zip
+          use_existing_version_if_available: true
           wait_for_environment_recovery: 300
 
       - name: Cleanup
