@@ -291,7 +291,7 @@ class AuthController extends Controller
         }
 
         try {
-            $status = Password::sendResetLink(
+            Password::sendResetLink(
                 $request->only('email')
             );
 
