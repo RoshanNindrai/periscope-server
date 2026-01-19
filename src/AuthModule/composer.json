@@ -1,0 +1,31 @@
+{
+    "name": "periscope/auth-module",
+    "description": "A drop-in authentication module for Laravel with email/password authentication and password reset",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "authentication", "auth", "sanctum"],
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0",
+        "laravel/sanctum": "^4.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "Periscope\\AuthModule\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Periscope\\AuthModule\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+        "providers": [
+            "Periscope\\AuthModule\\Providers\\AuthModuleServiceProvider"
+        ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

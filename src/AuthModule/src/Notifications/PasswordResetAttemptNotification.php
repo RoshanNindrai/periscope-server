@@ -1,0 +1,67 @@
+<?php
+
+namespace Periscope\AuthModule\Notifications;
+
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Notification;
+
+class PasswordResetAttemptNotification extends Notification implements ShouldQueue
+{
+    use Queueable;
+
+    /**
+     * Create a new notification instance.
+     */
+    public function __construct(
+        public string $lockToken
+    ) {
+        //
+    }
+
+    /**
+     * Get the notification's delivery channels.
+     *
+     * @return array<int, string>
+     */
+    public function via(object $notifiable): array
+    {
+        return ['mail'];
+    }
+
+    /**
+     * Get the mail representation of the notification.
+     */
+    public function toMail(object $notifiable): MailMessage
+    {
+        $lockUrl = $this->lockAccountUrl($notifiable);
+
+        return (new MailMessage)
+            ->subject('Password Reset Attempt - Action Required')
+            ->line('We detected a password reset attempt on your account.')
+            ->line('If you initiated this password reset, no further action is needed.')
+            ->line('If you did NOT request this password reset, please click the button below immediately to secure your account.')
+            ->action('Lock My Account - It Wasn\'t Me', $lockUrl)
+            ->line('This link will expire in 15 minutes for security reasons.')
+            ->line('If you don\'t recognize this activity, your account may have been compromised.');
+    }
+
+    /**
+     * Get the lock account URL for the given notifiable.
+     */
+    protected function lockAccountUrl(object $notifiable): string
+    {
+        $frontendUrl = config('auth-module.frontend_url', env('FRONTEND_URL', env('APP_URL', 'http://localhost')));
+        
+        $expires = now()->addMinutes(15)->timestamp;
+        $signature = hash_hmac('sha256', $notifiable->getKey() . '|' . $this->lockToken . '|' . $expires, config('app.key'));
+        
+        return $frontendUrl . '/lock-account?' . http_build_query([
+            'id' => $notifiable->getKey(),
+            'token' => $this->lockToken,
+            'expires' => $expires,
+            'signature' => $signature,
+        ]);
+    }
+}

@@ -1,0 +1,893 @@
+{
+	"info": {
+		"_postman_id": "periscope-auth-module",
+		"name": "Periscope Auth Module API",
+		"description": "Complete authentication API collection for testing email/password authentication, password reset, email verification, and account locking with enum-based responses",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 201\", function () {",
+									"    pm.response.to.have.status(201);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('REGISTERED');",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});",
+									"",
+									"pm.test(\"Response has user and token\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('user');",
+									"    pm.expect(jsonData).to.have.property('token');",
+									"    ",
+									"    if (jsonData.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.token);",
+									"        pm.environment.set(\"user_id\", jsonData.user.id);",
+									"        pm.environment.set(\"email\", jsonData.user.email);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Test User\",\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"register"
+							]
+						},
+						"description": "Register a new user. After registration, user receives email verification link.\n\n**Expected Response State**: `REGISTERED`"
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('LOGGED_IN');",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});",
+									"",
+									"pm.test(\"Response has user and token\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('user');",
+									"    pm.expect(jsonData).to.have.property('token');",
+									"    ",
+									"    if (jsonData.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.token);",
+									"        pm.environment.set(\"user_id\", jsonData.user.id);",
+									"    }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"password123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Login with email and password. Returns authentication token.\n\n**Expected Response State**: `LOGGED_IN`\n\n**Error States**:\n- `ACCOUNT_LOCKED` (403) - Account is locked\n- `LOGIN_FAILED` (500) - Server error"
+					},
+					"response": []
+				},
+				{
+					"name": "Login - Invalid Credentials",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 422\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});",
+									"",
+									"pm.test(\"Response has errors field (validation)\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('errors');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"wrong@example.com\",\n    \"password\": \"wrongpassword\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						},
+						"description": "Test login with invalid credentials. Should return validation error."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Current User (Me)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('USER_RETRIEVED');",
+									"});",
+									"",
+									"pm.test(\"Response has user field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('user');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/me",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"me"
+							]
+						},
+						"description": "Get the currently authenticated user. Requires Bearer token.\n\n**Expected Response State**: `USER_RETRIEVED`"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('LOGGED_OUT');",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"logout"
+							]
+						},
+						"description": "Logout the current user. Revokes the authentication token.\n\n**Expected Response State**: `LOGGED_OUT`"
+					},
+					"response": []
+				}
+			],
+			"description": "Basic authentication endpoints"
+		},
+		{
+			"name": "Password Reset",
+			"item": [
+				{
+					"name": "Forgot Password",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('PASSWORD_RESET_LINK_SENT');",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{email}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/forgot-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"forgot-password"
+							]
+						},
+						"description": "Request password reset. Sends email with reset link. Check storage/logs/laravel.log for the reset token.\n\n**Expected Response State**: `PASSWORD_RESET_LINK_SENT`\n\n**Note**: Token will be in the log file. Extract it from the email content."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.equal('PASSWORD_RESET');",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"token\": \"{{reset_token}}\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reset-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reset-password"
+							]
+						},
+						"description": "Reset password with token from email. After successful reset, user receives confirmation email with lock account option.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_TOKEN` (422) - Invalid or expired token\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get reset_token from storage/logs/laravel.log after calling Forgot Password."
+					},
+					"response": []
+				},
+				{
+					"name": "Reset Password - Invalid Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 422\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});",
+									"",
+									"pm.test(\"Response has error field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"    pm.expect(jsonData.error).to.be.oneOf(['INVALID_RESET_TOKEN', 'INVALID_USER']);",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"token\": \"invalid_token_12345\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/reset-password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"reset-password"
+							]
+						},
+						"description": "Test password reset with invalid token. Should return error enum."
+					},
+					"response": []
+				},
+				{
+					"name": "Lock Account (Unauthorized Reset)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.be.oneOf(['ACCOUNT_LOCKED', 'ACCOUNT_ALREADY_LOCKED']);",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": \"{{user_id}}\",\n    \"token\": \"{{lock_token}}\",\n    \"expires\": \"{{lock_expires}}\",\n    \"signature\": \"{{lock_signature}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/lock-account",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"lock-account"
+							]
+						},
+						"description": "Lock account if password reset was unauthorized. This endpoint is called from the email link sent after password reset.\n\n**Expected Response States**:\n- `ACCOUNT_LOCKED` - Account successfully locked\n- `ACCOUNT_ALREADY_LOCKED` - Account was already locked\n\n**Error States**:\n- `INVALID_LOCK_SIGNATURE` (422) - Invalid signature\n- `EXPIRED_LOCK_LINK` (422) - Link expired\n- `USER_NOT_FOUND` (404) - User not found\n- `ACCOUNT_LOCK_FAILED` (500) - Server error\n\n**Note**: Extract id, token, expires, and signature from the lock account email in storage/logs/laravel.log"
+					},
+					"response": []
+				}
+			],
+			"description": "Password reset flow with account locking feature"
+		},
+		{
+			"name": "Email Verification",
+			"item": [
+				{
+					"name": "Verify Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.be.oneOf(['EMAIL_VERIFIED', 'EMAIL_ALREADY_VERIFIED']);",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": \"{{verify_id}}\",\n    \"hash\": \"{{verify_hash}}\",\n    \"expires\": \"{{verify_expires}}\",\n    \"signature\": \"{{verify_signature}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verify-email",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verify-email"
+							]
+						},
+						"description": "Verify email address using token from verification email.\n\n**Expected Response States**:\n- `EMAIL_VERIFIED` - Email successfully verified\n- `EMAIL_ALREADY_VERIFIED` - Email was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_SIGNATURE` (422) - Invalid signature\n- `EXPIRED_VERIFICATION_LINK` (422) - Link expired\n- `INVALID_VERIFICATION_LINK` (422) - Invalid link\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_EMAIL` (500) - Server error\n- `EMAIL_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract id, hash, expires, and signature from the verification email in storage/logs/laravel.log"
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Email - Invalid Signature",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 422\", function () {",
+									"    pm.response.to.have.status(422);",
+									"});",
+									"",
+									"pm.test(\"Response has error field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('error');",
+									"    pm.expect(jsonData.error).to.be.oneOf([",
+									"        'INVALID_VERIFICATION_SIGNATURE',",
+									"        'EXPIRED_VERIFICATION_LINK',",
+									"        'INVALID_VERIFICATION_LINK',",
+									"        'USER_NOT_FOUND'",
+									"        'UNABLE_TO_VERIFY_EMAIL'",
+									"        'EMAIL_VERIFICATION_FAILED'",
+									"    ]);",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 1,\n    \"hash\": \"invalid_hash\",\n    \"expires\": 9999999999,\n    \"signature\": \"invalid_signature\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/api/verify-email",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"verify-email"
+							]
+						},
+						"description": "Test email verification with invalid signature. Should return error enum."
+					},
+					"response": []
+				},
+				{
+					"name": "Resend Verification Email",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"pm.test(\"Response has state field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('state');",
+									"    pm.expect(jsonData.state).to.be.oneOf(['VERIFICATION_EMAIL_SENT', 'EMAIL_ALREADY_VERIFIED']);",
+									"});",
+									"",
+									"pm.test(\"Response has message field\", function () {",
+									"    const jsonData = pm.response.json();",
+									"    pm.expect(jsonData).to.have.property('message');",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Accept",
+								"value": "application/json"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/resend-verification-email",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"resend-verification-email"
+							]
+						},
+						"description": "Resend email verification link. Requires authentication.\n\n**Expected Response States**:\n- `VERIFICATION_EMAIL_SENT` - Email sent successfully\n- `EMAIL_ALREADY_VERIFIED` - Email already verified\n\n**Error States**:\n- `VERIFICATION_EMAIL_SEND_FAILED` (500) - Failed to send email"
+					},
+					"response": []
+				}
+			],
+			"description": "Email verification endpoints"
+		},
+		{
+			"name": "Health Check",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test(\"Status code is 200\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test(\"Response has status field\", function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('status');",
+							"    pm.expect(jsonData.status).to.equal('HEALTH_CHECK');",
+							"});",
+							"",
+							"pm.test(\"Response has message field\", function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData).to.have.property('message');",
+							"});"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json"
+					}
+				],
+				"url": {
+					"raw": "{{base_url}}/api/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"api",
+						"health"
+					]
+				},
+				"description": "Health check endpoint to verify server is running.\n\n**Expected Response State**: `HEALTH_CHECK`\n\n**Alternative**: Laravel's built-in `/up` endpoint is also available at the root level."
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Global test: Check if response is JSON",
+					"pm.test(\"Response is JSON\", function () {",
+					"    pm.response.to.be.json;",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "user_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "email",
+			"value": "test@example.com",
+			"type": "string"
+		},
+		{
+			"key": "reset_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "lock_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "lock_expires",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "lock_signature",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "verify_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "verify_hash",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "verify_expires",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "verify_signature",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

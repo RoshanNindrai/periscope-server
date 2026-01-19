@@ -1,0 +1,60 @@
+# Laravel
+/.env
+/.env.backup
+/.env.production
+/.phpunit.result.cache
+/bootstrap/cache/*
+!/bootstrap/cache/.gitignore
+/storage/*.key
+/storage/app/*
+!/storage/app/.gitignore
+/storage/framework/cache/*
+!/storage/framework/cache/.gitignore
+/storage/framework/sessions/*
+!/storage/framework/sessions/.gitignore
+/storage/framework/testing/*
+!/storage/framework/testing/.gitignore
+/storage/framework/views/*
+!/storage/framework/views/.gitignore
+/storage/logs/*
+!/storage/logs/.gitignore
+/storage/pail
+/vendor
+
+# Dependencies
+/node_modules
+/package-lock.json
+/yarn.lock
+
+# Build assets
+/public/build
+/public/hot
+/public/storage
+
+# Database
+/database/*.sqlite
+/database/*.sqlite-journal
+/database/*.db
+
+# IDE & Editor
+/.fleet
+/.idea
+/.nova
+/.phpunit.cache
+/.vscode
+/.zed
+.phpactor.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Composer
+/auth.json
+
+# Homestead
+Homestead.json
+Homestead.yaml
+
+# Logs
+*.log
