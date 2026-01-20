@@ -23,13 +23,16 @@ enum AuthErrorCode: string
     case PASSWORD_RESET_FAILED = 'PASSWORD_RESET_FAILED';
     case INVALID_RESET_TOKEN = 'INVALID_RESET_TOKEN';
     case EXPIRED_RESET_TOKEN = 'EXPIRED_RESET_TOKEN';
+    case INVALID_RESET_CODE = 'INVALID_RESET_CODE';
+    case EXPIRED_RESET_CODE = 'EXPIRED_RESET_CODE';
+    case MAX_RESET_ATTEMPTS = 'MAX_RESET_ATTEMPTS';
     case INVALID_USER = 'INVALID_USER';
     
     // Email verification errors
     case EMAIL_VERIFICATION_FAILED = 'EMAIL_VERIFICATION_FAILED';
-    case INVALID_VERIFICATION_SIGNATURE = 'INVALID_VERIFICATION_SIGNATURE';
-    case EXPIRED_VERIFICATION_LINK = 'EXPIRED_VERIFICATION_LINK';
-    case INVALID_VERIFICATION_LINK = 'INVALID_VERIFICATION_LINK';
+    case INVALID_VERIFICATION_CODE = 'INVALID_VERIFICATION_CODE';
+    case EXPIRED_VERIFICATION_CODE = 'EXPIRED_VERIFICATION_CODE';
+    case MAX_VERIFICATION_ATTEMPTS = 'MAX_VERIFICATION_ATTEMPTS';
     case VERIFICATION_EMAIL_SEND_FAILED = 'VERIFICATION_EMAIL_SEND_FAILED';
     
     // Account locking errors
@@ -55,11 +58,14 @@ enum AuthErrorCode: string
             self::PASSWORD_RESET_FAILED => 'Password reset failed. Please try again later.',
             self::INVALID_RESET_TOKEN => 'Invalid or expired reset token.',
             self::EXPIRED_RESET_TOKEN => 'Reset token has expired.',
+            self::INVALID_RESET_CODE => 'Invalid or incorrect reset code.',
+            self::EXPIRED_RESET_CODE => 'Reset code has expired (10 minutes).',
+            self::MAX_RESET_ATTEMPTS => 'Too many failed attempts. Please request a new reset code.',
             self::INVALID_USER => 'Invalid user.',
             self::EMAIL_VERIFICATION_FAILED => 'Email verification failed. Please try again later.',
-            self::INVALID_VERIFICATION_SIGNATURE => 'Invalid verification link signature.',
-            self::EXPIRED_VERIFICATION_LINK => 'Verification link has expired.',
-            self::INVALID_VERIFICATION_LINK => 'Invalid verification link.',
+            self::INVALID_VERIFICATION_CODE => 'Invalid or incorrect verification code.',
+            self::EXPIRED_VERIFICATION_CODE => 'Verification code has expired (10 minutes).',
+            self::MAX_VERIFICATION_ATTEMPTS => 'Too many failed attempts. Please request a new verification code.',
             self::VERIFICATION_EMAIL_SEND_FAILED => 'Failed to send verification email. Please try again later.',
             self::ACCOUNT_LOCK_FAILED => 'Account lock failed. Please try again later.',
             self::INVALID_LOCK_SIGNATURE => 'Invalid lock account link signature.',
@@ -81,10 +87,13 @@ enum AuthErrorCode: string
             self::USER_NOT_FOUND => 404,
             self::INVALID_RESET_TOKEN,
             self::EXPIRED_RESET_TOKEN,
+            self::INVALID_RESET_CODE,
+            self::EXPIRED_RESET_CODE,
+            self::MAX_RESET_ATTEMPTS,
             self::INVALID_USER,
-            self::INVALID_VERIFICATION_SIGNATURE,
-            self::EXPIRED_VERIFICATION_LINK,
-            self::INVALID_VERIFICATION_LINK,
+            self::INVALID_VERIFICATION_CODE,
+            self::EXPIRED_VERIFICATION_CODE,
+            self::MAX_VERIFICATION_ATTEMPTS,
             self::INVALID_LOCK_SIGNATURE,
             self::EXPIRED_LOCK_LINK,
             self::VALIDATION_ERROR => 422,

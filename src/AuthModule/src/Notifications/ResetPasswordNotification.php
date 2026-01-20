@@ -15,7 +15,7 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
      * Create a new notification instance.
      */
     public function __construct(
-        public string $token
+        public string $code
     ) {
         //
     }
@@ -35,26 +35,13 @@ class ResetPasswordNotification extends Notification implements ShouldQueue
      */
     public function toMail(object $notifiable): MailMessage
     {
-        $resetUrl = $this->resetUrl($notifiable);
-
         return (new MailMessage)
             ->subject('Reset Password Notification')
             ->line('You are receiving this email because we received a password reset request for your account.')
-            ->action('Reset Password', $resetUrl)
-            ->line('This password reset link will expire in 60 minutes.')
+            ->line('')
+            ->line('**Password Reset Code: ' . $this->code . '**')
+            ->line('')
+            ->line('This password reset code will expire in 10 minutes.')
             ->line('If you did not request a password reset, no further action is required.');
-    }
-
-    /**
-     * Get the reset URL for the given notifiable.
-     */
-    protected function resetUrl(object $notifiable): string
-    {
-        $frontendUrl = config('auth-module.frontend_url', env('FRONTEND_URL', env('APP_URL', 'http://localhost')));
-        
-        return $frontendUrl . '/reset-password?' . http_build_query([
-            'token' => $this->token,
-            'email' => $notifiable->getEmailForPasswordReset(),
-        ]);
     }
 }

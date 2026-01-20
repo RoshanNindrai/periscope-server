@@ -323,7 +323,7 @@
 								"forgot-password"
 							]
 						},
-						"description": "Request password reset. Sends email with reset link. Check storage/logs/laravel.log for the reset token.\n\n**Expected Response State**: `PASSWORD_RESET_LINK_SENT`\n\n**Note**: Token will be in the log file. Extract it from the email content."
+						"description": "Request password reset. Sends 6-digit code to email instead of reset link. Check logs for code during testing.\n\n**Expected Response State**: `PASSWORD_RESET_LINK_SENT`\n\n**Note**: The 6-digit code will be in storage/logs/laravel.log. Extract it from the email content."
 					},
 					"response": []
 				},
@@ -367,7 +367,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"email\": \"{{email}}\",\n    \"token\": \"{{reset_token}}\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"code\": \"{{reset_code}}\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -384,7 +384,7 @@
 								"reset-password"
 							]
 						},
-						"description": "Reset password with token from email.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_TOKEN` (422) - Invalid or expired token\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get reset_token from the password reset email."
+						"description": "Reset password with 6-digit code from email. Code expires in 10 minutes. Max 5 attempts.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_RESET_CODE` (422) - Code expired (10 minutes)\n- `MAX_RESET_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get the 6-digit reset code from the password reset email in storage/logs/laravel.log"
 					},
 					"response": []
 				}
@@ -434,7 +434,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"id\": \"{{verify_id}}\",\n    \"hash\": \"{{verify_hash}}\",\n    \"expires\": \"{{verify_expires}}\",\n    \"signature\": \"{{verify_signature}}\"\n}",
+							"raw": "{\n    \"email\": \"{{email}}\",\n    \"code\": \"{{verification_code}}\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -451,7 +451,7 @@
 								"verify-email"
 							]
 						},
-						"description": "Verify email address using token from verification email.\n\n**Expected Response States**:\n- `EMAIL_VERIFIED` - Email successfully verified\n- `EMAIL_ALREADY_VERIFIED` - Email was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_SIGNATURE` (422) - Invalid signature\n- `EXPIRED_VERIFICATION_LINK` (422) - Link expired\n- `INVALID_VERIFICATION_LINK` (422) - Invalid link\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_EMAIL` (500) - Server error\n- `EMAIL_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract id, hash, expires, and signature from the verification email in storage/logs/laravel.log"
+						"description": "Verify email with 6-digit code sent via email. Code expires in 10 minutes. Max 5 attempts.\n\n**Expected Response States**:\n- `EMAIL_VERIFIED` - Email successfully verified\n- `EMAIL_ALREADY_VERIFIED` - Email was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_VERIFICATION_CODE` (422) - Code expired (10 minutes)\n- `MAX_VERIFICATION_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_EMAIL` (500) - Server error\n- `EMAIL_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract the 6-digit code from the verification email in storage/logs/laravel.log"
 					},
 					"response": []
 				},
@@ -605,27 +605,12 @@
 			"type": "string"
 		},
 		{
-			"key": "reset_token",
+			"key": "reset_code",
 			"value": "",
 			"type": "string"
 		},
 		{
-			"key": "verify_id",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "verify_hash",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "verify_expires",
-			"value": "",
-			"type": "string"
-		},
-		{
-			"key": "verify_signature",
+			"key": "verification_code",
 			"value": "",
 			"type": "string"
 		}

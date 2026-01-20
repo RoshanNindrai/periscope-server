@@ -67,6 +67,14 @@ class AuthController extends Controller
     }
 
     /**
+     * Generate a random 6-digit verification code
+     */
+    protected function generateVerificationCode(): string
+    {
+        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
      * Register a new user
      */
     public function register(Request $request): JsonResponse
@@ -98,10 +106,24 @@ class AuthController extends Controller
                 'password' => Hash::make($validated['password']),
             ]);
 
+            // Generate and store verification code
+            $code = $this->generateVerificationCode();
+            
+            // Delete any existing verification codes for this email
+            DB::table('email_verification_codes')->where('email', $user->email)->delete();
+            
+            // Store new verification code
+            DB::table('email_verification_codes')->insert([
+                'email' => $user->email,
+                'code' => $code,
+                'attempts' => 0,
+                'created_at' => now(),
+            ]);
+
             // Send email verification notification (queued)
             if (method_exists($user, 'sendEmailVerificationNotification')) {
                 try {
-                    $user->sendEmailVerificationNotification();
+                    $user->notify(new \Periscope\AuthModule\Notifications\VerifyEmailNotification($code));
                 } catch (Throwable $e) {
                     // Log but don't fail registration if email fails
                     Log::warning('Failed to queue verification email', [
@@ -272,10 +294,12 @@ class AuthController extends Controller
     }
 
     /**
-     * Send password reset link
+     * Send password reset code
      */
     public function forgotPassword(Request $request): JsonResponse
     {
+        $userModel = $this->getUserModel();
+        
         try {
             $request->validate([
                 'email' => 'required|email',
@@ -291,12 +315,36 @@ class AuthController extends Controller
         }
 
         try {
-            Password::sendResetLink(
-                $request->only('email')
-            );
+            // Find user (but don't reveal if they exist)
+            $user = $userModel::where('email', $request->email)->first();
+            
+            if ($user) {
+                // Generate and store reset code
+                $code = $this->generateVerificationCode();
+                
+                // Delete any existing reset codes for this email
+                DB::table('password_reset_codes')->where('email', $user->email)->delete();
+                
+                // Store new reset code
+                DB::table('password_reset_codes')->insert([
+                    'email' => $user->email,
+                    'code' => $code,
+                    'attempts' => 0,
+                    'created_at' => now(),
+                ]);
+
+                // Send password reset notification (queued)
+                try {
+                    $user->notify(new \Periscope\AuthModule\Notifications\ResetPasswordNotification($code));
+                } catch (Throwable $e) {
+                    Log::warning('Failed to queue password reset email', [
+                        'user_id' => $user->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
 
             // Always return success to prevent email enumeration
-            // Laravel's Password facade handles the case where user doesn't exist
             $state = AuthResponseState::PASSWORD_RESET_LINK_SENT;
             return response()->json([
                 'status' => $state->value,
@@ -318,7 +366,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Reset password
+     * Reset password with 6-digit code
      */
     public function resetPassword(Request $request): JsonResponse
     {
@@ -326,8 +374,8 @@ class AuthController extends Controller
         
         try {
             $request->validate([
-                'token' => 'required|string',
                 'email' => 'required|email',
+                'code' => 'required|string|size:6',
                 'password' => $this->getPasswordRules(),
             ]);
         } catch (ValidationException $e) {
@@ -341,48 +389,10 @@ class AuthController extends Controller
         }
 
         try {
-            $status = Password::reset(
-                $request->only('email', 'password', 'password_confirmation', 'token'),
-                function ($user, string $password) {
-                    $user->password = Hash::make($password);
-                    $user->save();
-
-                    // Generate lock token for security notification
-                    $lockToken = Str::random(64);
-
-                    // Send password reset attempt notification (queued)
-                    // This email asks user to confirm if they initiated the reset
-                    try {
-                        $user->notify(new PasswordResetAttemptNotification($lockToken));
-                    } catch (Throwable $e) {
-                        // Log but don't fail password reset if email fails
-                        Log::warning('Failed to queue password reset attempt notification', [
-                            'user_id' => $user->id,
-                            'error' => $e->getMessage(),
-                        ]);
-                    }
-                }
-            );
-
-            if ($status === Password::PASSWORD_RESET) {
-                $state = AuthResponseState::PASSWORD_RESET;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                ], 200);
-            }
-
-            // Handle different failure cases
-            if ($status === Password::INVALID_TOKEN) {
-                $error = AuthErrorCode::INVALID_RESET_TOKEN;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            if ($status === Password::INVALID_USER) {
+            // Get user
+            $user = $userModel::where('email', $request->email)->first();
+            
+            if (!$user) {
                 $error = AuthErrorCode::INVALID_USER;
                 return response()->json([
                     'status' => $error->value,
@@ -391,12 +401,86 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            $error = AuthErrorCode::PASSWORD_RESET_FAILED;
+            // Get reset code record
+            $codeRecord = DB::table('password_reset_codes')
+                ->where('email', $request->email)
+                ->first();
+
+            if (!$codeRecord) {
+                $error = AuthErrorCode::INVALID_RESET_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if code has expired (10 minutes)
+            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
+            if (now()->diffInMinutes($createdAt) > 10) {
+                // Delete expired code
+                DB::table('password_reset_codes')->where('email', $request->email)->delete();
+                
+                $error = AuthErrorCode::EXPIRED_RESET_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if max attempts reached
+            if ($codeRecord->attempts >= 5) {
+                $error = AuthErrorCode::MAX_RESET_ATTEMPTS;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Verify code matches
+            if ($codeRecord->code !== $request->code) {
+                // Increment attempts
+                DB::table('password_reset_codes')
+                    ->where('email', $request->email)
+                    ->increment('attempts');
+                
+                $error = AuthErrorCode::INVALID_RESET_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Code is valid - reset password
+            $user->password = Hash::make($request->password);
+            $user->save();
+
+            // Delete the reset code
+            DB::table('password_reset_codes')->where('email', $request->email)->delete();
+
+            // Generate lock token for security notification
+            $lockToken = Str::random(64);
+
+            // Send password reset attempt notification (queued)
+            // This email asks user to confirm if they initiated the reset
+            try {
+                $user->notify(new PasswordResetAttemptNotification($lockToken));
+            } catch (Throwable $e) {
+                // Log but don't fail password reset if email fails
+                Log::warning('Failed to queue password reset attempt notification', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            $state = AuthResponseState::PASSWORD_RESET;
             return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+                'status' => $state->value,
+                'message' => $state->message(),
+            ], 200);
         } catch (Throwable $e) {
             Log::error('Password reset failed', [
                 'email' => $request->email,
@@ -413,7 +497,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Verify email address
+     * Verify email address with 6-digit code
      */
     public function verifyEmail(Request $request): JsonResponse
     {
@@ -421,10 +505,8 @@ class AuthController extends Controller
 
         try {
             $request->validate([
-                'id' => 'required|integer',
-                'hash' => 'required|string',
-                'expires' => 'required|integer',
-                'signature' => 'required|string',
+                'email' => 'required|email',
+                'code' => 'required|string|size:6',
             ]);
         } catch (ValidationException $e) {
             $error = AuthErrorCode::VALIDATION_ERROR;
@@ -437,56 +519,10 @@ class AuthController extends Controller
         }
 
         try {
-            // Verify signature - ensure consistent string types
-            $id = (string) $request->id;
-            $hash = (string) $request->hash;
-            $expires = (string) $request->expires;
-            
-            // Build the signature payload exactly as it was generated
-            $signaturePayload = $id . '|' . $hash . '|' . $expires;
-            $appKey = config('app.key');
-            
-            // Ensure APP_KEY is properly decoded (Laravel stores it as base64:...)
-            if (strpos($appKey, 'base64:') === 0) {
-                $appKey = base64_decode(substr($appKey, 7));
-            }
-            
-            $expectedSignature = hash_hmac('sha256', $signaturePayload, $appKey);
-            
-            if (!hash_equals($expectedSignature, $request->signature)) {
-                // Log debug info for troubleshooting (remove in production)
-                \Log::warning('Email verification signature mismatch', [
-                    'provided_signature' => $request->signature,
-                    'expected_signature' => $expectedSignature,
-                    'payload' => $signaturePayload,
-                    'id' => $id,
-                    'hash' => $hash,
-                    'expires' => $expires,
-                    'app_key_prefix' => substr($appKey, 0, 10) . '...',
-                ]);
-                
-                $error = AuthErrorCode::INVALID_VERIFICATION_SIGNATURE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if expired
-            if (now()->timestamp > $request->expires) {
-                $error = AuthErrorCode::EXPIRED_VERIFICATION_LINK;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
             // Get user
-            try {
-                $user = $userModel::findOrFail($request->id);
-            } catch (ModelNotFoundException $e) {
+            $user = $userModel::where('email', $request->email)->first();
+            
+            if (!$user) {
                 $error = AuthErrorCode::USER_NOT_FOUND;
                 return response()->json([
                     'status' => $error->value,
@@ -495,16 +531,7 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            // Verify hash matches email
-            if (!hash_equals((string) $request->hash, sha1($user->getEmailForVerification()))) {
-                $error = AuthErrorCode::INVALID_VERIFICATION_LINK;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
+            // Check if already verified
             if ($user->hasVerifiedEmail()) {
                 $state = AuthResponseState::EMAIL_ALREADY_VERIFIED;
                 return response()->json([
@@ -513,7 +540,64 @@ class AuthController extends Controller
                 ], 200);
             }
 
+            // Get verification code record
+            $codeRecord = DB::table('email_verification_codes')
+                ->where('email', $request->email)
+                ->first();
+
+            if (!$codeRecord) {
+                $error = AuthErrorCode::INVALID_VERIFICATION_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if code has expired (10 minutes)
+            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
+            if (now()->diffInMinutes($createdAt) > 10) {
+                // Delete expired code
+                DB::table('email_verification_codes')->where('email', $request->email)->delete();
+                
+                $error = AuthErrorCode::EXPIRED_VERIFICATION_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if max attempts reached
+            if ($codeRecord->attempts >= 5) {
+                $error = AuthErrorCode::MAX_VERIFICATION_ATTEMPTS;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Verify code matches
+            if ($codeRecord->code !== $request->code) {
+                // Increment attempts
+                DB::table('email_verification_codes')
+                    ->where('email', $request->email)
+                    ->increment('attempts');
+                
+                $error = AuthErrorCode::INVALID_VERIFICATION_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Code is valid - mark email as verified
             if ($user->markEmailAsVerified()) {
+                // Delete the verification code
+                DB::table('email_verification_codes')->where('email', $request->email)->delete();
+                
                 $state = AuthResponseState::EMAIL_VERIFIED;
                 return response()->json([
                     'status' => $state->value,
@@ -530,7 +614,7 @@ class AuthController extends Controller
             ], $error->statusCode());
         } catch (Throwable $e) {
             Log::error('Email verification failed', [
-                'user_id' => $request->id ?? null,
+                'email' => $request->email ?? null,
                 'error' => $e->getMessage(),
             ]);
 
@@ -544,7 +628,7 @@ class AuthController extends Controller
     }
 
     /**
-     * Resend email verification notification
+     * Resend email verification code
      */
     public function resendVerificationEmail(Request $request): JsonResponse
     {
@@ -559,22 +643,35 @@ class AuthController extends Controller
                 ], 200);
             }
 
-            if (method_exists($user, 'sendEmailVerificationNotification')) {
-                try {
-                    $user->sendEmailVerificationNotification();
-                } catch (Throwable $e) {
-                    Log::warning('Failed to queue verification email', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
+            // Generate new verification code
+            $code = $this->generateVerificationCode();
+            
+            // Delete old verification code (invalidate previous)
+            DB::table('email_verification_codes')->where('email', $user->email)->delete();
+            
+            // Store new verification code
+            DB::table('email_verification_codes')->insert([
+                'email' => $user->email,
+                'code' => $code,
+                'attempts' => 0,
+                'created_at' => now(),
+            ]);
 
-                    $error = AuthErrorCode::VERIFICATION_EMAIL_SEND_FAILED;
-                    return response()->json([
-                        'status' => $error->value,
-                        'error' => $error->value,
-                        'message' => $error->message(),
-                    ], $error->statusCode());
-                }
+            // Send email with new code
+            try {
+                $user->notify(new \Periscope\AuthModule\Notifications\VerifyEmailNotification($code));
+            } catch (Throwable $e) {
+                Log::warning('Failed to queue verification email', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $error = AuthErrorCode::VERIFICATION_EMAIL_SEND_FAILED;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
             }
 
             $state = AuthResponseState::VERIFICATION_EMAIL_SENT;
