@@ -120,10 +120,67 @@ The authentication module is located in `src/AuthModule/` and can be used as a s
 
 The application is configured for AWS Elastic Beanstalk deployment with:
 - Automatic .env configuration
-- Queue worker auto-start
+- Queue worker managed by systemd (Amazon Linux 2023 compatible)
 - RDS database integration
 - SQS queue processing
 - SES email sending
+
+### Queue Worker Setup
+
+The queue worker runs as a systemd service that:
+- ✅ Auto-starts on boot
+- ✅ Auto-restarts on crash (5 second delay)
+- ✅ Handles graceful shutdown for long-running jobs (3600s timeout)
+- ✅ Logs to `/var/app/current/storage/logs/queue-worker.log`
+
+**After deployment, verify the worker is running:**
+
+SSH into your EC2 instance and run:
+
+```bash
+# Check service status
+sudo systemctl status laravel-worker.service
+
+# Check process
+ps aux | grep "artisan queue:work"
+
+# View logs
+tail -f /var/app/current/storage/logs/queue-worker.log
+
+# View systemd journal
+journalctl -u laravel-worker.service -f
+
+# Manual control (if needed)
+sudo systemctl restart laravel-worker.service
+sudo systemctl stop laravel-worker.service
+sudo systemctl start laravel-worker.service
+```
+
+**Troubleshooting:**
+
+If jobs fail with path errors:
+```bash
+# Check working directory is correct
+sudo systemctl status laravel-worker.service | grep WorkingDirectory
+
+# Should show: WorkingDirectory=/var/app/current
+# NOT /var/app/staging
+```
+
+If logs show permission errors:
+```bash
+# Fix permissions
+sudo mkdir -p /var/app/current/storage/logs
+sudo chown -R webapp:webapp /var/app/current/storage
+sudo chmod -R 775 /var/app/current/storage
+sudo systemctl restart laravel-worker.service
+```
+
+### Configuration Files
+
+- `.ebextensions/07-queue-worker.config` - EB configuration for log tailing and permissions
+- `.platform/hooks/postdeploy/02_laravel_queue_worker.sh` - Creates and starts systemd service
+- `.platform/hooks/postdeploy/99_verify_queue_worker.sh` - Post-deploy verification script
 
 ## License
 
