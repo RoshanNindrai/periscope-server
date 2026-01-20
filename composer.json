@@ -26,7 +26,8 @@
             "App\\": "app/",
             "Database\\Factories\\": "database/factories/",
             "Database\\Seeders\\": "database/seeders/",
-            "Periscope\\AuthModule\\": "src/AuthModule/src/"
+            "Periscope\\AuthModule\\": "src/AuthModule/src/",
+            "Periscope\\SearchModule\\": "src/SearchModule/src/"
         }
     },
     "autoload-dev": {

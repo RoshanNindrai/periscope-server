@@ -1,0 +1,16 @@
+{
+    "name": "periscope/search-module",
+    "description": "User search module for Periscope with username/name search",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["laravel", "search", "users"],
+    "require": {
+        "php": "^8.2",
+        "laravel/framework": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Periscope\\SearchModule\\": "src/"
+        }
+    }
+}
