@@ -4,9 +4,9 @@ namespace Periscope\SearchModule\Enums;
 
 enum SearchResponseState: string
 {
-    case USERS_FOUND = 'users_found';
-    case NO_RESULTS_FOUND = 'no_results_found';
-    case SEARCH_SUCCESS = 'search_success';
+    case USERS_FOUND = 'USERS_FOUND';
+    case NO_RESULTS_FOUND = 'NO_RESULTS_FOUND';
+    case SEARCH_SUCCESS = 'SEARCH_SUCCESS';
 
     public function message(): string
     {

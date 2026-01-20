@@ -4,9 +4,9 @@ namespace Periscope\SearchModule\Enums;
 
 enum SearchErrorCode: string
 {
-    case VALIDATION_ERROR = 'validation_error';
-    case SEARCH_TERM_TOO_SHORT = 'search_term_too_short';
-    case SEARCH_FAILED = 'search_failed';
+    case VALIDATION_ERROR = 'VALIDATION_ERROR';
+    case SEARCH_TERM_TOO_SHORT = 'SEARCH_TERM_TOO_SHORT';
+    case SEARCH_FAILED = 'SEARCH_FAILED';
 
     public function message(): string
     {
