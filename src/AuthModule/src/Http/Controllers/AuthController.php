@@ -347,7 +347,7 @@ class AuthController extends Controller
             }
 
             // Always return success to prevent email enumeration
-            $state = AuthResponseState::PASSWORD_RESET_LINK_SENT;
+            $state = AuthResponseState::PASSWORD_RESET_CODE_SENT;
             return response()->json([
                 'status' => $state->value,
                 'message' => $state->message(),
@@ -359,7 +359,7 @@ class AuthController extends Controller
             ]);
 
             // Still return success to prevent email enumeration
-            $state = AuthResponseState::PASSWORD_RESET_LINK_SENT;
+            $state = AuthResponseState::PASSWORD_RESET_CODE_SENT;
             return response()->json([
                 'status' => $state->value,
                 'message' => $state->message(),

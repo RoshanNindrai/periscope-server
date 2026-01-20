@@ -7,7 +7,7 @@ enum AuthResponseState: string
     case REGISTERED = 'REGISTERED';
     case LOGGED_IN = 'LOGGED_IN';
     case LOGGED_OUT = 'LOGGED_OUT';
-    case PASSWORD_RESET_LINK_SENT = 'PASSWORD_RESET_LINK_SENT';
+    case PASSWORD_RESET_CODE_SENT = 'PASSWORD_RESET_CODE_SENT';
     case PASSWORD_RESET = 'PASSWORD_RESET';
     case EMAIL_VERIFIED = 'EMAIL_VERIFIED';
     case EMAIL_ALREADY_VERIFIED = 'EMAIL_ALREADY_VERIFIED';
@@ -26,7 +26,7 @@ enum AuthResponseState: string
             self::REGISTERED => 'User registered successfully. Please check your email to verify your account.',
             self::LOGGED_IN => 'Login successful',
             self::LOGGED_OUT => 'Logged out successfully',
-            self::PASSWORD_RESET_LINK_SENT => 'If an account exists with that email, a password reset link has been sent.',
+            self::PASSWORD_RESET_CODE_SENT => 'If an account exists with that email, a password reset code has been sent.',
             self::PASSWORD_RESET => 'Password has been reset successfully. Please check your email to confirm this action.',
             self::EMAIL_VERIFIED => 'Email verified successfully.',
             self::EMAIL_ALREADY_VERIFIED => 'Email already verified.',

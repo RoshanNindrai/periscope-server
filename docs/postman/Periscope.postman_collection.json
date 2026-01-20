@@ -281,7 +281,7 @@
                   "pm.test(\"Response has state field\", function () {",
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('PASSWORD_RESET_LINK_SENT');",
+                  "    pm.expect(jsonData.state).to.equal('PASSWORD_RESET_CODE_SENT');",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -324,7 +324,7 @@
                 "forgot-password"
               ]
             },
-            "description": "Request password reset. Sends 6-digit code to email instead of reset link. Check logs for code during testing.\n\n**Expected Response State**: `PASSWORD_RESET_LINK_SENT`\n\n**Note**: The 6-digit code will be in storage/logs/laravel.log. Extract it from the email content."
+            "description": "Request password reset. Sends 6-digit code to email. Check logs for code during testing.\n\n**Expected Response State**: `PASSWORD_RESET_CODE_SENT`\n\n**Note**: The 6-digit code will be in storage/logs/laravel.log. Extract it from the email content."
           },
           "response": []
         },

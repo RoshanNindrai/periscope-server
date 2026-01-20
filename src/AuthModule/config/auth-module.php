@@ -17,8 +17,8 @@ return [
     | Frontend URL
     |--------------------------------------------------------------------------
     |
-    | This is the URL of your frontend application. It's used in password
-    | reset emails to generate the reset link.
+    | This is the URL of your frontend application. It's used in account
+    | lock emails to generate the lock account link.
     |
     */
     'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
