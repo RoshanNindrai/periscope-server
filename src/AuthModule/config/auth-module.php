@@ -54,12 +54,10 @@ return [
     */
     'rate_limits' => [
         'register' => env('AUTH_MODULE_RATE_LIMIT_REGISTER', '5,1'), // 5 attempts per minute
-        'login' => env('AUTH_MODULE_RATE_LIMIT_LOGIN', '5,1'), // 5 attempts per minute
-        'forgot_password' => env('AUTH_MODULE_RATE_LIMIT_FORGOT_PASSWORD', '5,1'), // 5 attempts per minute
-        'reset_password' => env('AUTH_MODULE_RATE_LIMIT_RESET_PASSWORD', '5,1'), // 5 attempts per minute
+        'login' => env('AUTH_MODULE_RATE_LIMIT_LOGIN', '5,1'), // 5 attempts per minute (send OTP)
+        'verify_login' => env('AUTH_MODULE_RATE_LIMIT_VERIFY_LOGIN', '5,1'), // 5 attempts per minute (verify OTP)
         'resend_verification' => env('AUTH_MODULE_RATE_LIMIT_RESEND_VERIFICATION', '3,1'), // 3 attempts per minute
-        'verify_email' => env('AUTH_MODULE_RATE_LIMIT_VERIFY_EMAIL', '5,1'), // 5 attempts per minute
-        'lock_account' => env('AUTH_MODULE_RATE_LIMIT_LOCK_ACCOUNT', '5,1'), // 5 attempts per minute
+        'verify_phone' => env('AUTH_MODULE_RATE_LIMIT_VERIFY_PHONE', '5,1'), // 5 attempts per minute
     ],
 
     /*
@@ -85,4 +83,20 @@ return [
     'password_require_lowercase' => env('AUTH_MODULE_PASSWORD_REQUIRE_LOWERCASE', false),
     'password_require_numbers' => env('AUTH_MODULE_PASSWORD_REQUIRE_NUMBERS', false),
     'password_require_symbols' => env('AUTH_MODULE_PASSWORD_REQUIRE_SYMBOLS', false),
+
+    /*
+    |--------------------------------------------------------------------------
+    | AWS Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Configuration for AWS services (SNS for SMS delivery)
+    |
+    */
+    'aws' => [
+        'sns' => [
+            'region' => env('AWS_SNS_REGION', env('AWS_DEFAULT_REGION', 'us-east-1')),
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+        ],
+    ],
 ];

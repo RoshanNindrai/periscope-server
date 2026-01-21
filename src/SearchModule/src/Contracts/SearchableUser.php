@@ -9,5 +9,5 @@ interface SearchableUser
     public function getId(): int;
     public function getName(): string;
     public function getUsername(): string;
-    public function getEmailVerifiedAt(): ?Carbon;
+    public function getPhoneVerifiedAt(): ?Carbon;
 }

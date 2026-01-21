@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "bc22443d-31c5-40aa-9611-d0f5f4b05c1e",
     "name": "Periscope",
-    "description": "Mobile app authentication API collection for email/password authentication, password reset, and email verification with enum-based responses",
+    "description": "Mobile app authentication API collection for phone-based passwordless authentication with OTP verification",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "1288169"
   },
@@ -21,10 +21,10 @@
                   "    pm.response.to.have.status(201);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('REGISTERED');",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.equal('REGISTERED');",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -40,7 +40,7 @@
                   "    if (jsonData.token) {",
                   "        pm.environment.set(\"auth_token\", jsonData.token);",
                   "        pm.environment.set(\"user_id\", jsonData.user.id);",
-                  "        pm.environment.set(\"email\", jsonData.user.email);",
+                  "        pm.environment.set(\"phone\", jsonData.user.phone);",
                   "    }",
                   "});"
                 ],
@@ -62,7 +62,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"name\": \"Test User\",\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\",\n    \"password_confirmation\": \"password123\"\n}",
+              "raw": "{\n    \"name\": \"Test User\",\n    \"username\": \"testuser\",\n    \"phone\": \"+14155552671\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -79,12 +79,12 @@
                 "register"
               ]
             },
-            "description": "Register a new user. After registration, user receives email verification link.\n\n**Expected Response State**: `REGISTERED`"
+            "description": "Register a new user with phone number. After registration, user receives SMS with verification code.\n\n**Expected Response Status**: `REGISTERED`\n\n**Note**: Phone number must be in E.164 format (e.g., +14155552671)"
           },
           "response": []
         },
         {
-          "name": "Login",
+          "name": "Login - Send OTP",
           "event": [
             {
               "listen": "test",
@@ -94,10 +94,71 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('LOGGED_IN');",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.equal('LOGIN_CODE_SENT');",
+                  "});",
+                  "",
+                  "pm.test(\"Response has message field\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('message');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone\": \"{{phone}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/api/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "login"
+              ]
+            },
+            "description": "Step 1 of login: Send OTP code to user's phone. User will receive 6-digit code via SMS.\n\n**Expected Response Status**: `LOGIN_CODE_SENT`\n\n**Error States**:\n- `USER_NOT_FOUND` (404) - Phone number not registered\n- `LOGIN_CODE_SEND_FAILED` (500) - Failed to send SMS\n- `LOGIN_FAILED` (500) - Server error\n\n**Note**: Extract the 6-digit code from storage/logs/laravel.log during testing"
+          },
+          "response": []
+        },
+        {
+          "name": "Login - Verify OTP",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test(\"Response has status field\", function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.equal('LOGGED_IN');",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -134,7 +195,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"{{email}}\",\n    \"password\": \"password123\"\n}",
+              "raw": "{\n    \"phone\": \"{{phone}}\",\n    \"code\": \"{{login_code}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -142,16 +203,16 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/api/login",
+              "raw": "{{base_url}}/api/verify-login",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "login"
+                "verify-login"
               ]
             },
-            "description": "Login with email and password. Returns authentication token.\n\n**Expected Response State**: `LOGGED_IN`\n\n**Error States**:\n- `ACCOUNT_LOCKED` (403) - Account is locked\n- `LOGIN_FAILED` (500) - Server error"
+            "description": "Step 2 of login: Verify OTP code received via SMS. Returns authentication token.\n\n**Expected Response Status**: `LOGGED_IN`\n\n**Error States**:\n- `INVALID_LOGIN_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_LOGIN_CODE` (422) - Code expired (10 minutes)\n- `MAX_LOGIN_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `LOGIN_FAILED` (500) - Server error\n\n**Note**: Get the 6-digit code from the SMS or storage/logs/laravel.log during testing"
           },
           "response": []
         },
@@ -166,10 +227,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('USER_RETRIEVED');",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.equal('USER_RETRIEVED');",
                   "});",
                   "",
                   "pm.test(\"Response has user field\", function () {",
@@ -204,7 +265,7 @@
                 "me"
               ]
             },
-            "description": "Get the currently authenticated user. Requires Bearer token.\n\n**Expected Response State**: `USER_RETRIEVED`"
+            "description": "Get the currently authenticated user. Requires Bearer token.\n\n**Expected Response Status**: `USER_RETRIEVED`"
           },
           "response": []
         },
@@ -219,10 +280,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('LOGGED_OUT');",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.equal('LOGGED_OUT');",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -257,18 +318,18 @@
                 "logout"
               ]
             },
-            "description": "Logout the current user. Revokes the authentication token.\n\n**Expected Response State**: `LOGGED_OUT`"
+            "description": "Logout the current user. Revokes the authentication token.\n\n**Expected Response Status**: `LOGGED_OUT`"
           },
           "response": []
         }
       ],
-      "description": "Basic authentication endpoints"
+      "description": "Phone-based passwordless authentication with OTP"
     },
     {
-      "name": "Password Reset",
+      "name": "Phone Verification",
       "item": [
         {
-          "name": "Forgot Password",
+          "name": "Verify Phone",
           "event": [
             {
               "listen": "test",
@@ -278,10 +339,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('PASSWORD_RESET_CODE_SENT');",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.be.oneOf(['PHONE_VERIFIED', 'PHONE_ALREADY_VERIFIED']);",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -307,7 +368,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"{{email}}\"\n}",
+              "raw": "{\n    \"phone\": \"{{phone}}\",\n    \"code\": \"{{verification_code}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -315,21 +376,21 @@
               }
             },
             "url": {
-              "raw": "{{base_url}}/api/forgot-password",
+              "raw": "{{base_url}}/api/verify-phone",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "forgot-password"
+                "verify-phone"
               ]
             },
-            "description": "Request password reset. Sends 6-digit code to email. Check logs for code during testing.\n\n**Expected Response State**: `PASSWORD_RESET_CODE_SENT`\n\n**Note**: The 6-digit code will be in storage/logs/laravel.log. Extract it from the email content."
+            "description": "Verify phone number with 6-digit code sent via SMS. Code expires in 10 minutes. Max 5 attempts.\n\n**Expected Response States**:\n- `PHONE_VERIFIED` - Phone successfully verified\n- `PHONE_ALREADY_VERIFIED` - Phone was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_VERIFICATION_CODE` (422) - Code expired (10 minutes)\n- `MAX_VERIFICATION_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_PHONE` (500) - Server error\n- `PHONE_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract the 6-digit code from the SMS or storage/logs/laravel.log during testing"
           },
           "response": []
         },
         {
-          "name": "Reset Password",
+          "name": "Resend Verification SMS",
           "event": [
             {
               "listen": "test",
@@ -339,138 +400,10 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has state field\", function () {",
+                  "pm.test(\"Response has status field\", function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.equal('PASSWORD_RESET');",
-                  "});",
-                  "",
-                  "pm.test(\"Response has message field\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('message');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"{{email}}\",\n    \"code\": \"{{reset_code}}\",\n    \"password\": \"newpassword123\",\n    \"password_confirmation\": \"newpassword123\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/reset-password",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "reset-password"
-              ]
-            },
-            "description": "Reset password with 6-digit code from email. Code expires in 10 minutes. Max 5 attempts.\n\n**Expected Response State**: `PASSWORD_RESET`\n\n**Error States**:\n- `INVALID_RESET_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_RESET_CODE` (422) - Code expired (10 minutes)\n- `MAX_RESET_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `INVALID_USER` (422) - User not found\n- `PASSWORD_RESET_FAILED` (500) - Server error\n\n**Note**: Get the 6-digit reset code from the password reset email in storage/logs/laravel.log"
-          },
-          "response": []
-        }
-      ],
-      "description": "Password reset flow"
-    },
-    {
-      "name": "Email Verification",
-      "item": [
-        {
-          "name": "Verify Email",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response has state field\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.be.oneOf(['EMAIL_VERIFIED', 'EMAIL_ALREADY_VERIFIED']);",
-                  "});",
-                  "",
-                  "pm.test(\"Response has message field\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('message');",
-                  "});"
-                ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "Accept",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n    \"email\": \"{{email}}\",\n    \"code\": \"{{verification_code}}\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{base_url}}/api/verify-email",
-              "host": [
-                "{{base_url}}"
-              ],
-              "path": [
-                "api",
-                "verify-email"
-              ]
-            },
-            "description": "Verify email with 6-digit code sent via email. Code expires in 10 minutes. Max 5 attempts.\n\n**Expected Response States**:\n- `EMAIL_VERIFIED` - Email successfully verified\n- `EMAIL_ALREADY_VERIFIED` - Email was already verified\n\n**Error States**:\n- `INVALID_VERIFICATION_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_VERIFICATION_CODE` (422) - Code expired (10 minutes)\n- `MAX_VERIFICATION_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `UNABLE_TO_VERIFY_EMAIL` (500) - Server error\n- `EMAIL_VERIFICATION_FAILED` (500) - General failure\n\n**Note**: Extract the 6-digit code from the verification email in storage/logs/laravel.log"
-          },
-          "response": []
-        },
-        {
-          "name": "Resend Verification Email",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "pm.test(\"Status code is 200\", function () {",
-                  "    pm.response.to.have.status(200);",
-                  "});",
-                  "",
-                  "pm.test(\"Response has state field\", function () {",
-                  "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('state');",
-                  "    pm.expect(jsonData.state).to.be.oneOf(['VERIFICATION_EMAIL_SENT', 'EMAIL_ALREADY_VERIFIED']);",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData.status).to.be.oneOf(['VERIFICATION_SMS_SENT', 'PHONE_ALREADY_VERIFIED']);",
                   "});",
                   "",
                   "pm.test(\"Response has message field\", function () {",
@@ -496,21 +429,21 @@
               }
             ],
             "url": {
-              "raw": "{{base_url}}/api/resend-verification-email",
+              "raw": "{{base_url}}/api/resend-verification-sms",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
                 "api",
-                "resend-verification-email"
+                "resend-verification-sms"
               ]
             },
-            "description": "Resend email verification link. Requires authentication.\n\n**Expected Response States**:\n- `VERIFICATION_EMAIL_SENT` - Email sent successfully\n- `EMAIL_ALREADY_VERIFIED` - Email already verified\n\n**Error States**:\n- `VERIFICATION_EMAIL_SEND_FAILED` (500) - Failed to send email"
+            "description": "Resend phone verification SMS. Requires authentication.\n\n**Expected Response States**:\n- `VERIFICATION_SMS_SENT` - SMS sent successfully\n- `PHONE_ALREADY_VERIFIED` - Phone already verified\n\n**Error States**:\n- `VERIFICATION_SMS_SEND_FAILED` (500) - Failed to send SMS"
           },
           "response": []
         }
       ],
-      "description": "Email verification endpoints"
+      "description": "Phone verification endpoints"
     },
     {
       "name": "Search",
@@ -579,187 +512,7 @@
             },
             "description": "Search for users by username or name. Returns users matching the search term as a prefix.\n\n**Authentication Required:** Yes (Bearer token)\n\n**Rate Limit:** 30 requests per minute\n\n**Search Strategy:**\n1. Exact username match (highest priority)\n2. Username prefix match\n3. Name prefix match\n\n**Query Parameters:**\n- `q` (required): Search term, minimum 2 characters, maximum 100 characters\n\n**Response:**\n- `status`: Response status (users_found, no_results_found)\n- `message`: Human-readable message\n- `data`: Array of user objects\n- `meta`: Pagination metadata"
           },
-          "response": [
-            {
-              "name": "Success - Users Found",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json",
-                    "type": "text"
-                  },
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/users/search?q=john",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "users",
-                    "search"
-                  ],
-                  "query": [
-                    {
-                      "key": "q",
-                      "value": "john"
-                    }
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n    \"status\": \"users_found\",\n    \"message\": \"Users found matching your search.\",\n    \"data\": [\n        {\n            \"id\": 1,\n            \"name\": \"John Doe\",\n            \"username\": \"john.doe\",\n            \"email_verified_at\": \"2026-01-20T10:00:00.000000Z\"\n        },\n        {\n            \"id\": 2,\n            \"name\": \"Johnny Smith\",\n            \"username\": \"johnny_smith\",\n            \"email_verified_at\": \"2026-01-20T11:30:00.000000Z\"\n        }\n    ],\n    \"meta\": {\n        \"current_page\": 1,\n        \"per_page\": 15,\n        \"total\": 2,\n        \"last_page\": 1\n    }\n}"
-            },
-            {
-              "name": "Success - No Results",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json",
-                    "type": "text"
-                  },
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/users/search?q=xyz999",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "users",
-                    "search"
-                  ],
-                  "query": [
-                    {
-                      "key": "q",
-                      "value": "xyz999"
-                    }
-                  ]
-                }
-              },
-              "status": "OK",
-              "code": 200,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n    \"status\": \"no_results_found\",\n    \"message\": \"No users found matching your search.\",\n    \"data\": [],\n    \"meta\": {\n        \"current_page\": 1,\n        \"per_page\": 15,\n        \"total\": 0,\n        \"last_page\": 1\n    }\n}"
-            },
-            {
-              "name": "Error - Validation Failed",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json",
-                    "type": "text"
-                  },
-                  {
-                    "key": "Authorization",
-                    "value": "Bearer {{auth_token}}",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/users/search?q=a",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "users",
-                    "search"
-                  ],
-                  "query": [
-                    {
-                      "key": "q",
-                      "value": "a"
-                    }
-                  ]
-                }
-              },
-              "status": "Unprocessable Entity",
-              "code": 422,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n    \"status\": \"validation_error\",\n    \"error\": \"validation_error\",\n    \"message\": \"Validation failed for the provided search parameters.\",\n    \"errors\": {\n        \"q\": [\n            \"The q field must be at least 2 characters.\"\n        ]\n    }\n}"
-            },
-            {
-              "name": "Error - Unauthorized",
-              "originalRequest": {
-                "method": "GET",
-                "header": [
-                  {
-                    "key": "Accept",
-                    "value": "application/json",
-                    "type": "text"
-                  }
-                ],
-                "url": {
-                  "raw": "{{base_url}}/api/users/search?q=john",
-                  "host": [
-                    "{{base_url}}"
-                  ],
-                  "path": [
-                    "api",
-                    "users",
-                    "search"
-                  ],
-                  "query": [
-                    {
-                      "key": "q",
-                      "value": "john"
-                    }
-                  ]
-                }
-              },
-              "status": "Unauthorized",
-              "code": 401,
-              "_postman_previewlanguage": "json",
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "cookie": [],
-              "body": "{\n    \"message\": \"Unauthenticated.\"\n}"
-            }
-          ]
+          "response": []
         }
       ]
     },
@@ -810,7 +563,7 @@
                 "health"
               ]
             },
-            "description": "Health check endpoint to verify server is running.\n\n**Expected Response State**: `HEALTH_CHECK`\n\n**Alternative**: Laravel's built-in `/up` endpoint is also available at the root level."
+            "description": "Health check endpoint to verify server is running.\n\n**Expected Response Status**: `HEALTH_CHECK`\n\n**Alternative**: Laravel's built-in `/up` endpoint is also available at the root level."
           },
           "response": []
         }
@@ -857,12 +610,12 @@
       "type": "string"
     },
     {
-      "key": "email",
-      "value": "test@example.com",
+      "key": "phone",
+      "value": "+14155552671",
       "type": "string"
     },
     {
-      "key": "reset_code",
+      "key": "login_code",
       "value": "",
       "type": "string"
     },

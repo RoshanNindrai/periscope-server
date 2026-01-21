@@ -53,7 +53,7 @@ class SearchController extends Controller
 
             // Exact username match
             $exactMatch = $userModel::where('username', $normalizedTerm)
-                ->select('id', 'name', 'username', 'email_verified_at')
+                ->select('id', 'name', 'username', 'phone_verified_at')
                 ->first();
 
             if ($exactMatch) {
@@ -72,7 +72,7 @@ class SearchController extends Controller
 
             // Username prefix + Name prefix search
             $results = $userModel::query()
-                ->select('id', 'name', 'username', 'email_verified_at')
+                ->select('id', 'name', 'username', 'phone_verified_at')
                 ->where(function ($query) use ($normalizedTerm, $searchTerm) {
                     $query->where('username', 'like', $normalizedTerm . '%')
                           ->orWhere('name', 'like', $searchTerm . '%');

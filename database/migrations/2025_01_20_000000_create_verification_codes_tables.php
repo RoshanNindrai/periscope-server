@@ -11,8 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('email_verification_codes', function (Blueprint $table) {
-            $table->string('email')->primary();
+        // Phone verification codes (for account verification after registration)
+        Schema::create('phone_verification_codes', function (Blueprint $table) {
+            $table->string('phone', 20)->primary();
             $table->string('code', 6);
             $table->integer('attempts')->default(0);
             $table->timestamp('created_at')->nullable();
@@ -20,8 +21,9 @@ return new class extends Migration
             $table->index('created_at');
         });
 
-        Schema::create('password_reset_codes', function (Blueprint $table) {
-            $table->string('email')->primary();
+        // Login verification codes (OTP for passwordless login)
+        Schema::create('login_verification_codes', function (Blueprint $table) {
+            $table->string('phone', 20)->primary();
             $table->string('code', 6);
             $table->integer('attempts')->default(0);
             $table->timestamp('created_at')->nullable();
@@ -35,7 +37,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('email_verification_codes');
-        Schema::dropIfExists('password_reset_codes');
+        Schema::dropIfExists('phone_verification_codes');
+        Schema::dropIfExists('login_verification_codes');
     }
 };

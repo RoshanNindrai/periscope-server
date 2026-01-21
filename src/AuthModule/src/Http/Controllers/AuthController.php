@@ -4,16 +4,13 @@ namespace Periscope\AuthModule\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Periscope\AuthModule\Notifications\PasswordResetAttemptNotification;
+use Periscope\AuthModule\Notifications\VerifyPhoneNotification;
+use Periscope\AuthModule\Notifications\LoginOtpNotification;
 use Periscope\AuthModule\Enums\AuthResponseState;
 use Periscope\AuthModule\Enums\AuthErrorCode;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Throwable;
 
@@ -38,35 +35,6 @@ class AuthController extends Controller
     }
 
     /**
-     * Get password validation rules
-     */
-    protected function getPasswordRules(): array
-    {
-        $rules = ['required', 'string', 'confirmed'];
-        
-        $minLength = config('auth-module.password_min_length', 8);
-        $rules[] = "min:{$minLength}";
-        
-        if (config('auth-module.password_require_uppercase', false)) {
-            $rules[] = 'regex:/[A-Z]/';
-        }
-        
-        if (config('auth-module.password_require_lowercase', false)) {
-            $rules[] = 'regex:/[a-z]/';
-        }
-        
-        if (config('auth-module.password_require_numbers', false)) {
-            $rules[] = 'regex:/[0-9]/';
-        }
-        
-        if (config('auth-module.password_require_symbols', false)) {
-            $rules[] = 'regex:/[^A-Za-z0-9]/';
-        }
-        
-        return $rules;
-    }
-
-    /**
      * Generate a random 6-digit verification code
      */
     protected function generateVerificationCode(): string
@@ -85,8 +53,7 @@ class AuthController extends Controller
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'username' => 'required|string|min:3|max:30|unique:users|regex:/^[a-z0-9._]+$/',
-                'email' => 'required|string|email|max:255|unique:users',
-                'password' => $this->getPasswordRules(),
+                'phone' => ['required', 'string', 'phone:AUTO', 'unique:users'],
             ]);
         } catch (ValidationException $e) {
             $error = AuthErrorCode::VALIDATION_ERROR;
@@ -101,38 +68,38 @@ class AuthController extends Controller
         try {
             DB::beginTransaction();
 
+            // Format phone to E.164
+            $phone = phone($validated['phone'])->formatE164();
+
             $user = $userModel::create([
                 'name' => $validated['name'],
                 'username' => $validated['username'],
-                'email' => $validated['email'],
-                'password' => Hash::make($validated['password']),
+                'phone' => $phone,
             ]);
 
             // Generate and store verification code
             $code = $this->generateVerificationCode();
             
-            // Delete any existing verification codes for this email
-            DB::table('email_verification_codes')->where('email', $user->email)->delete();
+            // Delete any existing verification codes for this phone
+            DB::table('phone_verification_codes')->where('phone', $user->phone)->delete();
             
             // Store new verification code
-            DB::table('email_verification_codes')->insert([
-                'email' => $user->email,
+            DB::table('phone_verification_codes')->insert([
+                'phone' => $user->phone,
                 'code' => $code,
                 'attempts' => 0,
                 'created_at' => now(),
             ]);
 
-            // Send email verification notification (queued)
-            if (method_exists($user, 'sendEmailVerificationNotification')) {
-                try {
-                    $user->notify(new \Periscope\AuthModule\Notifications\VerifyEmailNotification($code));
-                } catch (Throwable $e) {
-                    // Log but don't fail registration if email fails
-                    Log::warning('Failed to queue verification email', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+            // Send phone verification notification (queued)
+            try {
+                $user->notify(new VerifyPhoneNotification($code));
+            } catch (Throwable $e) {
+                // Log but don't fail registration if SMS fails
+                Log::warning('Failed to queue verification SMS', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             $token = $user->createToken($this->getTokenName())->plainTextToken;
@@ -149,7 +116,7 @@ class AuthController extends Controller
         } catch (Throwable $e) {
             DB::rollBack();
             Log::error('User registration failed', [
-                'email' => $validated['email'] ?? null,
+                'phone' => $validated['phone'] ?? null,
                 'error' => $e->getMessage(),
             ]);
 
@@ -163,16 +130,15 @@ class AuthController extends Controller
     }
 
     /**
-     * Login user
+     * Send login OTP code to user's phone
      */
     public function login(Request $request): JsonResponse
     {
         $userModel = $this->getUserModel();
         
         try {
-            $request->validate([
-                'email' => 'required|email',
-                'password' => 'required|string',
+            $validated = $request->validate([
+                'phone' => ['required', 'string', 'phone:AUTO'],
             ]);
         } catch (ValidationException $e) {
             $error = AuthErrorCode::VALIDATION_ERROR;
@@ -185,23 +151,13 @@ class AuthController extends Controller
         }
 
         try {
-            $user = $userModel::where('email', $request->email)->first();
+            // Format phone to E.164
+            $phone = phone($validated['phone'])->formatE164();
 
-            if (!$user || !Hash::check($request->password, $user->password)) {
-                $error = AuthErrorCode::INVALID_CREDENTIALS;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                    'errors' => [
-                        'email' => [$error->message()],
-                    ],
-                ], $error->statusCode());
-            }
+            $user = $userModel::where('phone', $phone)->first();
 
-            // Check if account is locked
-            if (method_exists($user, 'isLocked') && $user->isLocked()) {
-                $error = AuthErrorCode::ACCOUNT_LOCKED;
+            if (!$user) {
+                $error = AuthErrorCode::USER_NOT_FOUND;
                 return response()->json([
                     'status' => $error->value,
                     'error' => $error->value,
@@ -209,15 +165,69 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            $token = $user->createToken($this->getTokenName())->plainTextToken;
+            // Generate and store login code
+            $code = $this->generateVerificationCode();
+            
+            // Delete any existing login codes for this phone
+            DB::table('login_verification_codes')->where('phone', $user->phone)->delete();
+            
+            // Store new login code
+            DB::table('login_verification_codes')->insert([
+                'phone' => $user->phone,
+                'code' => $code,
+                'attempts' => 0,
+                'created_at' => now(),
+            ]);
 
-            $state = AuthResponseState::LOGGED_IN;
+            // Send login OTP notification (queued)
+            try {
+                $user->notify(new LoginOtpNotification($code));
+            } catch (Throwable $e) {
+                Log::warning('Failed to queue login SMS', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $error = AuthErrorCode::LOGIN_CODE_SEND_FAILED;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            $state = AuthResponseState::LOGIN_CODE_SENT;
             return response()->json([
                 'status' => $state->value,
                 'message' => $state->message(),
-                'user' => $user,
-                'token' => $token,
             ], 200);
+        } catch (Throwable $e) {
+            Log::error('Login code send failed', [
+                'phone' => $validated['phone'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
+
+            $error = AuthErrorCode::LOGIN_FAILED;
+            return response()->json([
+                'status' => $error->value,
+                'error' => $error->value,
+                'message' => $error->message(),
+            ], $error->statusCode());
+        }
+    }
+
+    /**
+     * Verify login OTP code and authenticate user
+     */
+    public function verifyLogin(Request $request): JsonResponse
+    {
+        $userModel = $this->getUserModel();
+
+        try {
+            $validated = $request->validate([
+                'phone' => ['required', 'string', 'phone:AUTO'],
+                'code' => 'required|string|size:6',
+            ]);
         } catch (ValidationException $e) {
             $error = AuthErrorCode::VALIDATION_ERROR;
             return response()->json([
@@ -226,9 +236,93 @@ class AuthController extends Controller
                 'message' => $error->message(),
                 'errors' => $e->errors(),
             ], $error->statusCode());
+        }
+
+        try {
+            // Format phone to E.164
+            $phone = phone($validated['phone'])->formatE164();
+
+            // Get user
+            $user = $userModel::where('phone', $phone)->first();
+            
+            if (!$user) {
+                $error = AuthErrorCode::USER_NOT_FOUND;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Get login code record
+            $codeRecord = DB::table('login_verification_codes')
+                ->where('phone', $phone)
+                ->first();
+
+            if (!$codeRecord) {
+                $error = AuthErrorCode::INVALID_LOGIN_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if code has expired (10 minutes)
+            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
+            if (now()->diffInMinutes($createdAt) > 10) {
+                // Delete expired code
+                DB::table('login_verification_codes')->where('phone', $phone)->delete();
+                
+                $error = AuthErrorCode::EXPIRED_LOGIN_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Check if max attempts reached
+            if ($codeRecord->attempts >= 5) {
+                $error = AuthErrorCode::MAX_LOGIN_ATTEMPTS;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Verify code matches (constant-time comparison to prevent timing attacks)
+            if (!hash_equals($codeRecord->code, $request->code)) {
+                // Increment attempts
+                DB::table('login_verification_codes')
+                    ->where('phone', $phone)
+                    ->increment('attempts');
+                
+                $error = AuthErrorCode::INVALID_LOGIN_CODE;
+                return response()->json([
+                    'status' => $error->value,
+                    'error' => $error->value,
+                    'message' => $error->message(),
+                ], $error->statusCode());
+            }
+
+            // Code is valid - create session token
+            $token = $user->createToken($this->getTokenName())->plainTextToken;
+
+            // Delete the login code
+            DB::table('login_verification_codes')->where('phone', $phone)->delete();
+
+            $state = AuthResponseState::LOGGED_IN;
+            return response()->json([
+                'status' => $state->value,
+                'message' => $state->message(),
+                'user' => $user,
+                'token' => $token,
+            ], 200);
         } catch (Throwable $e) {
-            Log::error('Login failed', [
-                'email' => $request->email,
+            Log::error('Login verification failed', [
+                'phone' => $validated['phone'] ?? null,
                 'error' => $e->getMessage(),
             ]);
 
@@ -296,218 +390,15 @@ class AuthController extends Controller
     }
 
     /**
-     * Send password reset code
+     * Verify phone number with 6-digit code
      */
-    public function forgotPassword(Request $request): JsonResponse
-    {
-        $userModel = $this->getUserModel();
-        
-        try {
-            $request->validate([
-                'email' => 'required|email',
-            ]);
-        } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
-        }
-
-        try {
-            // Find user (but don't reveal if they exist)
-            $user = $userModel::where('email', $request->email)->first();
-            
-            if ($user) {
-                // Generate and store reset code
-                $code = $this->generateVerificationCode();
-                
-                // Delete any existing reset codes for this email
-                DB::table('password_reset_codes')->where('email', $user->email)->delete();
-                
-                // Store new reset code
-                DB::table('password_reset_codes')->insert([
-                    'email' => $user->email,
-                    'code' => $code,
-                    'attempts' => 0,
-                    'created_at' => now(),
-                ]);
-
-                // Send password reset notification (queued)
-                try {
-                    $user->notify(new \Periscope\AuthModule\Notifications\ResetPasswordNotification($code));
-                } catch (Throwable $e) {
-                    Log::warning('Failed to queue password reset email', [
-                        'user_id' => $user->id,
-                        'error' => $e->getMessage(),
-                    ]);
-                }
-            }
-
-            // Always return success to prevent email enumeration
-            $state = AuthResponseState::PASSWORD_RESET_CODE_SENT;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
-        } catch (Throwable $e) {
-            Log::error('Password reset request failed', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
-            ]);
-
-            // Still return success to prevent email enumeration
-            $state = AuthResponseState::PASSWORD_RESET_CODE_SENT;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
-        }
-    }
-
-    /**
-     * Reset password with 6-digit code
-     */
-    public function resetPassword(Request $request): JsonResponse
-    {
-        $userModel = $this->getUserModel();
-        
-        try {
-            $request->validate([
-                'email' => 'required|email',
-                'code' => 'required|string|size:6',
-                'password' => $this->getPasswordRules(),
-            ]);
-        } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
-        }
-
-        try {
-            // Get user
-            $user = $userModel::where('email', $request->email)->first();
-            
-            if (!$user) {
-                $error = AuthErrorCode::INVALID_USER;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Get reset code record
-            $codeRecord = DB::table('password_reset_codes')
-                ->where('email', $request->email)
-                ->first();
-
-            if (!$codeRecord) {
-                $error = AuthErrorCode::INVALID_RESET_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if code has expired (10 minutes)
-            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
-            if (now()->diffInMinutes($createdAt) > 10) {
-                // Delete expired code
-                DB::table('password_reset_codes')->where('email', $request->email)->delete();
-                
-                $error = AuthErrorCode::EXPIRED_RESET_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if max attempts reached
-            if ($codeRecord->attempts >= 5) {
-                $error = AuthErrorCode::MAX_RESET_ATTEMPTS;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Verify code matches
-            if ($codeRecord->code !== $request->code) {
-                // Increment attempts
-                DB::table('password_reset_codes')
-                    ->where('email', $request->email)
-                    ->increment('attempts');
-                
-                $error = AuthErrorCode::INVALID_RESET_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Code is valid - reset password
-            $user->password = Hash::make($request->password);
-            $user->save();
-
-            // Delete the reset code
-            DB::table('password_reset_codes')->where('email', $request->email)->delete();
-
-            // Generate lock token for security notification
-            $lockToken = Str::random(64);
-
-            // Send password reset attempt notification (queued)
-            // This email asks user to confirm if they initiated the reset
-            try {
-                $user->notify(new PasswordResetAttemptNotification($lockToken));
-            } catch (Throwable $e) {
-                // Log but don't fail password reset if email fails
-                Log::warning('Failed to queue password reset attempt notification', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            $state = AuthResponseState::PASSWORD_RESET;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
-        } catch (Throwable $e) {
-            Log::error('Password reset failed', [
-                'email' => $request->email,
-                'error' => $e->getMessage(),
-            ]);
-
-            $error = AuthErrorCode::PASSWORD_RESET_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
-        }
-    }
-
-    /**
-     * Verify email address with 6-digit code
-     */
-    public function verifyEmail(Request $request): JsonResponse
+    public function verifyPhone(Request $request): JsonResponse
     {
         $userModel = $this->getUserModel();
 
         try {
-            $request->validate([
-                'email' => 'required|email',
+            $validated = $request->validate([
+                'phone' => ['required', 'string', 'phone:AUTO'],
                 'code' => 'required|string|size:6',
             ]);
         } catch (ValidationException $e) {
@@ -521,8 +412,11 @@ class AuthController extends Controller
         }
 
         try {
+            // Format phone to E.164
+            $phone = phone($validated['phone'])->formatE164();
+
             // Get user
-            $user = $userModel::where('email', $request->email)->first();
+            $user = $userModel::where('phone', $phone)->first();
             
             if (!$user) {
                 $error = AuthErrorCode::USER_NOT_FOUND;
@@ -534,8 +428,8 @@ class AuthController extends Controller
             }
 
             // Check if already verified
-            if ($user->hasVerifiedEmail()) {
-                $state = AuthResponseState::EMAIL_ALREADY_VERIFIED;
+            if ($user->hasVerifiedPhone()) {
+                $state = AuthResponseState::PHONE_ALREADY_VERIFIED;
                 return response()->json([
                     'status' => $state->value,
                     'message' => $state->message(),
@@ -543,8 +437,8 @@ class AuthController extends Controller
             }
 
             // Get verification code record
-            $codeRecord = DB::table('email_verification_codes')
-                ->where('email', $request->email)
+            $codeRecord = DB::table('phone_verification_codes')
+                ->where('phone', $phone)
                 ->first();
 
             if (!$codeRecord) {
@@ -560,7 +454,7 @@ class AuthController extends Controller
             $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
             if (now()->diffInMinutes($createdAt) > 10) {
                 // Delete expired code
-                DB::table('email_verification_codes')->where('email', $request->email)->delete();
+                DB::table('phone_verification_codes')->where('phone', $phone)->delete();
                 
                 $error = AuthErrorCode::EXPIRED_VERIFICATION_CODE;
                 return response()->json([
@@ -580,11 +474,11 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            // Verify code matches
-            if ($codeRecord->code !== $request->code) {
+            // Verify code matches (constant-time comparison to prevent timing attacks)
+            if (!hash_equals($codeRecord->code, $request->code)) {
                 // Increment attempts
-                DB::table('email_verification_codes')
-                    ->where('email', $request->email)
+                DB::table('phone_verification_codes')
+                    ->where('phone', $phone)
                     ->increment('attempts');
                 
                 $error = AuthErrorCode::INVALID_VERIFICATION_CODE;
@@ -595,12 +489,12 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            // Code is valid - mark email as verified
-            if ($user->markEmailAsVerified()) {
+            // Code is valid - mark phone as verified
+            if ($user->markPhoneAsVerified()) {
                 // Delete the verification code
-                DB::table('email_verification_codes')->where('email', $request->email)->delete();
+                DB::table('phone_verification_codes')->where('phone', $phone)->delete();
                 
-                $state = AuthResponseState::EMAIL_VERIFIED;
+                $state = AuthResponseState::PHONE_VERIFIED;
                 return response()->json([
                     'status' => $state->value,
                     'message' => $state->message(),
@@ -608,19 +502,19 @@ class AuthController extends Controller
                 ], 200);
             }
 
-            $error = AuthErrorCode::UNABLE_TO_VERIFY_EMAIL;
+            $error = AuthErrorCode::UNABLE_TO_VERIFY_PHONE;
             return response()->json([
                 'status' => $error->value,
                 'error' => $error->value,
                 'message' => $error->message(),
             ], $error->statusCode());
         } catch (Throwable $e) {
-            Log::error('Email verification failed', [
-                'email' => $request->email ?? null,
+            Log::error('Phone verification failed', [
+                'phone' => $validated['phone'] ?? null,
                 'error' => $e->getMessage(),
             ]);
 
-            $error = AuthErrorCode::EMAIL_VERIFICATION_FAILED;
+            $error = AuthErrorCode::PHONE_VERIFICATION_FAILED;
             return response()->json([
                 'status' => $error->value,
                 'error' => $error->value,
@@ -630,15 +524,15 @@ class AuthController extends Controller
     }
 
     /**
-     * Resend email verification code
+     * Resend phone verification code
      */
-    public function resendVerificationEmail(Request $request): JsonResponse
+    public function resendVerificationSms(Request $request): JsonResponse
     {
         try {
             $user = $request->user();
 
-            if ($user->hasVerifiedEmail()) {
-                $state = AuthResponseState::EMAIL_ALREADY_VERIFIED;
+            if ($user->hasVerifiedPhone()) {
+                $state = AuthResponseState::PHONE_ALREADY_VERIFIED;
                 return response()->json([
                     'status' => $state->value,
                     'message' => $state->message(),
@@ -649,26 +543,26 @@ class AuthController extends Controller
             $code = $this->generateVerificationCode();
             
             // Delete old verification code (invalidate previous)
-            DB::table('email_verification_codes')->where('email', $user->email)->delete();
+            DB::table('phone_verification_codes')->where('phone', $user->phone)->delete();
             
             // Store new verification code
-            DB::table('email_verification_codes')->insert([
-                'email' => $user->email,
+            DB::table('phone_verification_codes')->insert([
+                'phone' => $user->phone,
                 'code' => $code,
                 'attempts' => 0,
                 'created_at' => now(),
             ]);
 
-            // Send email with new code
+            // Send SMS with new code
             try {
-                $user->notify(new \Periscope\AuthModule\Notifications\VerifyEmailNotification($code));
+                $user->notify(new VerifyPhoneNotification($code));
             } catch (Throwable $e) {
-                Log::warning('Failed to queue verification email', [
+                Log::warning('Failed to queue verification SMS', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),
                 ]);
 
-                $error = AuthErrorCode::VERIFICATION_EMAIL_SEND_FAILED;
+                $error = AuthErrorCode::VERIFICATION_SMS_SEND_FAILED;
                 return response()->json([
                     'status' => $error->value,
                     'error' => $error->value,
@@ -676,133 +570,18 @@ class AuthController extends Controller
                 ], $error->statusCode());
             }
 
-            $state = AuthResponseState::VERIFICATION_EMAIL_SENT;
+            $state = AuthResponseState::VERIFICATION_SMS_SENT;
             return response()->json([
                 'status' => $state->value,
                 'message' => $state->message(),
             ], 200);
         } catch (Throwable $e) {
-            Log::error('Resend verification email failed', [
+            Log::error('Resend verification SMS failed', [
                 'user_id' => $request->user()->id ?? null,
                 'error' => $e->getMessage(),
             ]);
 
-            $error = AuthErrorCode::VERIFICATION_EMAIL_SEND_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
-        }
-    }
-
-    /**
-     * Lock account after password reset if user didn't initiate it
-     */
-    public function lockAccount(Request $request): JsonResponse
-    {
-        $userModel = $this->getUserModel();
-
-        try {
-            $request->validate([
-                'id' => 'required|integer',
-                'token' => 'required|string',
-                'expires' => 'required|integer',
-                'signature' => 'required|string',
-            ]);
-        } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
-        }
-
-        try {
-            // Verify signature - ensure consistent string types
-            $id = (string) $request->id;
-            $token = (string) $request->token;
-            $expires = (string) $request->expires;
-            
-            // Get and decode APP_KEY (Laravel stores it as base64:...)
-            $appKey = config('app.key');
-            if (strpos($appKey, 'base64:') === 0) {
-                $appKey = base64_decode(substr($appKey, 7));
-            }
-            
-            $expectedSignature = hash_hmac('sha256', $id . '|' . $token . '|' . $expires, $appKey);
-            if (!hash_equals($expectedSignature, $request->signature)) {
-                $error = AuthErrorCode::INVALID_LOCK_SIGNATURE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if expired
-            if (now()->timestamp > $request->expires) {
-                $error = AuthErrorCode::EXPIRED_LOCK_LINK;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Get user
-            try {
-                $user = $userModel::findOrFail($request->id);
-            } catch (ModelNotFoundException $e) {
-                $error = AuthErrorCode::USER_NOT_FOUND;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if already locked
-            if ($user->isLocked()) {
-                $state = AuthResponseState::ACCOUNT_ALREADY_LOCKED;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                ], 200);
-            }
-
-            // Lock the account
-            if ($user->lockAccount()) {
-                // Revoke all tokens for security
-                $user->tokens()->delete();
-
-                Log::warning('Account locked due to unauthorized password reset', [
-                    'user_id' => $user->id,
-                    'email' => $user->email,
-                ]);
-
-                $state = AuthResponseState::ACCOUNT_LOCKED;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                ], 200);
-            }
-
-            $error = AuthErrorCode::UNABLE_TO_LOCK_ACCOUNT;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
-        } catch (Throwable $e) {
-            Log::error('Account lock failed', [
-                'user_id' => $request->id ?? null,
-                'error' => $e->getMessage(),
-            ]);
-
-            $error = AuthErrorCode::ACCOUNT_LOCK_FAILED;
+            $error = AuthErrorCode::VERIFICATION_SMS_SEND_FAILED;
             return response()->json([
                 'status' => $error->value,
                 'error' => $error->value,

@@ -31,6 +31,11 @@ class AuthModuleServiceProvider extends ServiceProvider
             __DIR__ . '/../../database/migrations' => database_path('migrations'),
         ], 'auth-module-migrations');
 
+        // Register custom SMS notification channel
+        $this->app->make(\Illuminate\Notifications\ChannelManager::class)->extend('sms', function ($app) {
+            return new \Periscope\AuthModule\Notifications\Channels\SmsChannel();
+        });
+
         $this->loadRoutes();
     }
 
@@ -53,8 +58,8 @@ class AuthModuleServiceProvider extends ServiceProvider
                 // Rate limit sensitive endpoints
                 $registerLimit = config('auth-module.rate_limits.register', '5,1');
                 $loginLimit = config('auth-module.rate_limits.login', '5,1');
-                $forgotPasswordLimit = config('auth-module.rate_limits.forgot_password', '5,1');
-                $resetPasswordLimit = config('auth-module.rate_limits.reset_password', '5,1');
+                $verifyLoginLimit = config('auth-module.rate_limits.verify_login', '5,1');
+                $verifyPhoneLimit = config('auth-module.rate_limits.verify_phone', '5,1');
                 
                 Route::middleware("throttle:{$registerLimit}")->group(function () {
                     Route::post('/register', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'register'])
@@ -66,21 +71,14 @@ class AuthModuleServiceProvider extends ServiceProvider
                         ->name('login');
                 });
                 
-                Route::middleware("throttle:{$forgotPasswordLimit}")->group(function () {
-                    Route::post('/forgot-password', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'forgotPassword'])
-                        ->name('forgot-password');
-                });
-                
-                Route::middleware("throttle:{$resetPasswordLimit}")->group(function () {
-                    Route::post('/reset-password', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'resetPassword'])
-                        ->name('reset-password');
+                Route::middleware("throttle:{$verifyLoginLimit}")->group(function () {
+                    Route::post('/verify-login', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'verifyLogin'])
+                        ->name('verify-login');
                 });
 
-                $verifyEmailLimit = config('auth-module.rate_limits.verify_email', '5,1');
-                
-                Route::middleware("throttle:{$verifyEmailLimit}")->group(function () {
-                    Route::post('/verify-email', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'verifyEmail'])
-                        ->name('verify-email');
+                Route::middleware("throttle:{$verifyPhoneLimit}")->group(function () {
+                    Route::post('/verify-phone', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'verifyPhone'])
+                        ->name('verify-phone');
                 });
 
                 Route::middleware('auth:sanctum')->group(function () {
@@ -92,8 +90,8 @@ class AuthModuleServiceProvider extends ServiceProvider
                     // Rate limit resend verification
                     $resendVerificationLimit = config('auth-module.rate_limits.resend_verification', '3,1');
                     Route::middleware("throttle:{$resendVerificationLimit}")->group(function () {
-                        Route::post('/resend-verification-email', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'resendVerificationEmail'])
-                            ->name('resend-verification-email');
+                        Route::post('/resend-verification-sms', [\Periscope\AuthModule\Http\Controllers\AuthController::class, 'resendVerificationSms'])
+                            ->name('resend-verification-sms');
                     });
                 });
             });

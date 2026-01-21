@@ -3,18 +3,16 @@
 namespace App\Models;
 
 use Carbon\Carbon;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
-use Periscope\AuthModule\Models\Concerns\HasPasswordReset;
 use Periscope\SearchModule\Contracts\SearchableUser;
 
-class User extends Authenticatable implements MustVerifyEmail, SearchableUser
+class User extends Authenticatable implements SearchableUser
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasApiTokens, HasFactory, Notifiable, HasPasswordReset;
+    use HasApiTokens, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -24,8 +22,7 @@ class User extends Authenticatable implements MustVerifyEmail, SearchableUser
     protected $fillable = [
         'name',
         'username',
-        'email',
-        'password',
+        'phone',
     ];
 
     /**
@@ -34,8 +31,7 @@ class User extends Authenticatable implements MustVerifyEmail, SearchableUser
      * @var list<string>
      */
     protected $hidden = [
-        'password',
-        'remember_token',
+        //
     ];
 
     /**
@@ -46,11 +42,37 @@ class User extends Authenticatable implements MustVerifyEmail, SearchableUser
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'phone_verified_at' => 'datetime',
         ];
     }
 
+    /**
+     * Determine if the user has verified their phone number.
+     */
+    public function hasVerifiedPhone(): bool
+    {
+        return !is_null($this->phone_verified_at);
+    }
+
+    /**
+     * Mark the user's phone as verified.
+     */
+    public function markPhoneAsVerified(): bool
+    {
+        return $this->forceFill([
+            'phone_verified_at' => $this->freshTimestamp(),
+        ])->save();
+    }
+
+    /**
+     * Route notifications for the SMS channel.
+     */
+    public function routeNotificationForSms($notification): ?string
+    {
+        return $this->phone;
+    }
+
+    // SearchableUser interface implementation
     public function getId(): int
     {
         return $this->id;
@@ -66,9 +88,8 @@ class User extends Authenticatable implements MustVerifyEmail, SearchableUser
         return $this->username;
     }
 
-    public function getEmailVerifiedAt(): ?Carbon
+    public function getPhoneVerifiedAt(): ?Carbon
     {
-        return $this->email_verified_at;
+        return $this->phone_verified_at;
     }
-
 }
