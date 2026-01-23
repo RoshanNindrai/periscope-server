@@ -146,16 +146,6 @@ return new class extends Migration
             }
         });
 
-        // Create password reset tokens (legacy, not used in phone auth but kept for compatibility)
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
-            
-            // Indexes
-            $table->index('created_at');
-            $table->index('token');
-        });
     }
 
     /**
@@ -170,7 +160,6 @@ return new class extends Migration
         Schema::dropIfExists('login_verification_codes');
         Schema::dropIfExists('phone_verification_codes');
         Schema::dropIfExists('sessions');
-        Schema::dropIfExists('password_reset_tokens');
         Schema::dropIfExists('cache_locks');
         Schema::dropIfExists('cache');
         Schema::dropIfExists('users');
