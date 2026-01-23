@@ -4,14 +4,14 @@ Laravel API server with authentication module.
 
 ## Features
 
-- ✅ User registration with email/password
-- ✅ Email verification (async/queued)
-- ✅ User login with token-based authentication (Laravel Sanctum)
-- ✅ Password reset flow with security notifications
-- ✅ Account locking for unauthorized password resets
+- ✅ User registration with phone number (passwordless)
+- ✅ Phone verification via SMS (async/queued)
+- ✅ Passwordless login with OTP codes
+- ✅ Token-based authentication (Laravel Sanctum)
+- ✅ Configurable SMS providers (Twilio or AWS SNS)
 - ✅ Enum-based API responses for type safety
 - ✅ Rate limiting on sensitive endpoints
-- ✅ Fully async email processing via queues
+- ✅ Fully async SMS processing via queues
 
 ## Quick Start
 
@@ -63,30 +63,33 @@ Update your `.env` file:
 ```env
 APP_URL=http://localhost:8000
 FRONTEND_URL=http://localhost:8000
-MAIL_MAILER=log
 QUEUE_CONNECTION=sync
+
+# AWS SNS Configuration for SMS
+AWS_ACCESS_KEY_ID=your_key
+AWS_SECRET_ACCESS_KEY=your_secret
+AWS_SNS_REGION=us-east-1
+
+# Local Development: Leave AWS credentials empty to enable log-only mode
+# SMS messages will be logged to storage/logs/laravel.log
 ```
 
-Emails will be logged to `storage/logs/laravel.log` for testing.
+**Local Testing:** When `APP_ENV=local` and SMS credentials are not set, SMS messages will be logged to `storage/logs/laravel.log` instead of being sent.
 
 ## API Endpoints
 
 All endpoints return enum-based responses with a `status` field.
 
 ### Authentication
-- `POST /api/register` - Register new user
-- `POST /api/login` - Login user
+- `POST /api/register` - Register new user with phone number
+- `POST /api/login` - Send OTP code to phone (passwordless login)
+- `POST /api/verify-login` - Verify OTP code and complete login
 - `POST /api/logout` - Logout (requires auth)
 - `GET /api/me` - Get current user (requires auth)
 
-### Password Reset
-- `POST /api/forgot-password` - Request password reset
-- `POST /api/reset-password` - Reset password with token
-- `POST /api/lock-account` - Lock account if reset was unauthorized
-
-### Email Verification
-- `POST /api/verify-email` - Verify email address
-- `POST /api/resend-verification-email` - Resend verification (requires auth)
+### Phone Verification
+- `POST /api/verify-phone` - Verify phone number with OTP code
+- `POST /api/resend-verification-sms` - Resend verification code (requires auth)
 
 ### Health Check
 - `GET /api/health` - Server health check
@@ -123,7 +126,7 @@ The application is configured for AWS Elastic Beanstalk deployment with:
 - Queue worker managed by systemd (Amazon Linux 2023 compatible)
 - RDS database integration
 - SQS queue processing
-- SES email sending
+- SMS delivery via AWS SNS
 
 ### Queue Worker Setup
 

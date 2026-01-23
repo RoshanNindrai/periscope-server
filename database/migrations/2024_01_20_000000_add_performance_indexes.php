@@ -13,8 +13,10 @@ return new class extends Migration
     {
         // Add indexes to users table for common queries
         Schema::table('users', function (Blueprint $table) {
-            // Index for filtering verified users
-            $table->index('email_verified_at');
+            // Index for filtering verified users (phone-based auth)
+            if (Schema::hasColumn('users', 'phone_verified_at')) {
+                $table->index('phone_verified_at');
+            }
             
             // Index for filtering locked accounts (if locked_at column exists)
             if (Schema::hasColumn('users', 'locked_at')) {
@@ -75,7 +77,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            $table->dropIndex(['email_verified_at']);
+            if (Schema::hasColumn('users', 'phone_verified_at')) {
+                $table->dropIndex(['phone_verified_at']);
+            }
             if (Schema::hasColumn('users', 'locked_at')) {
                 $table->dropIndex(['locked_at']);
             }

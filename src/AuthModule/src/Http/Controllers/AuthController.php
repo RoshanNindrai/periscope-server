@@ -43,6 +43,21 @@ class AuthController extends Controller
     }
 
     /**
+     * Mask phone number for logging (show last 4 digits only)
+     *
+     * @param  string|null  $phone
+     * @return string
+     */
+    protected function maskPhone(?string $phone): string
+    {
+        if (!$phone || strlen($phone) <= 4) {
+            return '****';
+        }
+        
+        return str_repeat('*', strlen($phone) - 4) . substr($phone, -4);
+    }
+
+    /**
      * Register a new user
      */
     public function register(Request $request): JsonResponse
@@ -116,7 +131,7 @@ class AuthController extends Controller
         } catch (Throwable $e) {
             DB::rollBack();
             Log::error('User registration failed', [
-                'phone' => $validated['phone'] ?? null,
+                'phone' => $this->maskPhone($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
 
@@ -203,7 +218,7 @@ class AuthController extends Controller
             ], 200);
         } catch (Throwable $e) {
             Log::error('Login code send failed', [
-                'phone' => $validated['phone'] ?? null,
+                'phone' => $this->maskPhone($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
 
@@ -322,7 +337,7 @@ class AuthController extends Controller
             ], 200);
         } catch (Throwable $e) {
             Log::error('Login verification failed', [
-                'phone' => $validated['phone'] ?? null,
+                'phone' => $this->maskPhone($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
 
@@ -510,7 +525,7 @@ class AuthController extends Controller
             ], $error->statusCode());
         } catch (Throwable $e) {
             Log::error('Phone verification failed', [
-                'phone' => $validated['phone'] ?? null,
+                'phone' => $this->maskPhone($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
 
