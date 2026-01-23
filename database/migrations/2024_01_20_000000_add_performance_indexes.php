@@ -14,14 +14,7 @@ return new class extends Migration
         // Add indexes to users table for common queries
         Schema::table('users', function (Blueprint $table) {
             // Index for filtering verified users (phone-based auth)
-            if (Schema::hasColumn('users', 'phone_verified_at')) {
-                $table->index('phone_verified_at');
-            }
-            
-            // Index for filtering locked accounts (if locked_at column exists)
-            if (Schema::hasColumn('users', 'locked_at')) {
-                $table->index('locked_at');
-            }
+            $table->index('phone_verified_at');
         });
 
         // Add foreign key constraint to sessions table (if foreign keys are enabled)
@@ -77,12 +70,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            if (Schema::hasColumn('users', 'phone_verified_at')) {
-                $table->dropIndex(['phone_verified_at']);
-            }
-            if (Schema::hasColumn('users', 'locked_at')) {
-                $table->dropIndex(['locked_at']);
-            }
+            $table->dropIndex(['phone_verified_at']);
         });
 
         if (config('database.connections.' . config('database.default') . '.foreign_key_constraints', true)) {
