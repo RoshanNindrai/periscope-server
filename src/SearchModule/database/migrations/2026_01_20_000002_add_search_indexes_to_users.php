@@ -10,7 +10,10 @@ return new class extends Migration
     {
         Schema::table('users', function (Blueprint $table) {
             $table->index('name');
-            $table->index(['username', 'id', 'name', 'email_verified_at'], 'idx_users_search_covering');
+            // Covering index for search queries (includes phone_verified_at for phone-based auth)
+            if (Schema::hasColumn('users', 'phone_verified_at')) {
+                $table->index(['username', 'id', 'name', 'phone_verified_at'], 'idx_users_search_covering');
+            }
         });
     }
 
