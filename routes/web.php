@@ -10,13 +10,13 @@ Route::get('/', function () {
             'health' => '/api/health',
             'register' => '/api/register',
             'login' => '/api/login',
+            'verify_login' => '/api/verify-login',
             'logout' => '/api/logout',
             'me' => '/api/me',
-            'search_users' => '/api/users/search?q={term}',
-            'verify_email' => '/api/verify-email',
-            'forgot_password' => '/api/forgot-password',
-            'reset_password' => '/api/reset-password',
+            'verify_phone' => '/api/verify-phone',
+            'resend_verification_sms' => '/api/resend-verification-sms',
+            'graphql' => 'POST /graphql',
         ],
-        'documentation' => 'See Postman collections in /docs/postman/',
+        'documentation' => 'See /docs/postman/Periscope.postman_collection.json',
     ]);
 });

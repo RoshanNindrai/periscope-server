@@ -3,61 +3,21 @@
 namespace Database\Factories;
 
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\User>
  */
 class UserFactory extends Factory
 {
-    /**
-     * The current password being used by the factory.
-     */
-    protected static ?string $password;
-
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     public function definition(): array
     {
-        $username = strtolower(
-            str_replace(
-                [' ', '-', "'", '"'],
-                ['_', '_', '', ''],
-                fake()->unique()->userName()
-            )
-        );
-        
-        $username = preg_replace('/[^a-z0-9._]/', '', $username);
-        
-        if (strlen($username) < 3) {
-            $username = 'user_' . fake()->unique()->numberBetween(100, 999);
-        }
-        
-        if (strlen($username) > 30) {
-            $username = substr($username, 0, 30);
-        }
+        $username = strtolower(preg_replace('/[^a-z0-9._]/', '', fake()->unique()->userName()));
+        $username = strlen($username) < 3 ? 'u' . fake()->unique()->numberBetween(10000, 99999) : substr($username, 0, 30);
 
         return [
             'name' => fake()->name(),
             'username' => $username,
-            'email' => fake()->unique()->safeEmail(),
-            'email_verified_at' => now(),
-            'password' => static::$password ??= Hash::make('password'),
-            'remember_token' => Str::random(10),
+            'phone' => fake()->e164PhoneNumber(),
         ];
-    }
-
-    /**
-     * Indicate that the model's email address should be unverified.
-     */
-    public function unverified(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'email_verified_at' => null,
-        ]);
     }
 }

@@ -14,17 +14,6 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Frontend URL
-    |--------------------------------------------------------------------------
-    |
-    | This is the URL of your frontend application. It's used in account
-    | lock emails to generate the lock account link.
-    |
-    */
-    'frontend_url' => env('FRONTEND_URL', env('APP_URL', 'http://localhost')),
-
-    /*
-    |--------------------------------------------------------------------------
     | Route Prefix
     |--------------------------------------------------------------------------
     |
@@ -69,20 +58,6 @@ return [
     |
     */
     'token_name' => env('AUTH_MODULE_TOKEN_NAME', 'periscope-auth-token'),
-
-    /*
-    |--------------------------------------------------------------------------
-    | Password Requirements
-    |--------------------------------------------------------------------------
-    |
-    | Password validation rules. Can be customized per application needs.
-    |
-    */
-    'password_min_length' => env('AUTH_MODULE_PASSWORD_MIN_LENGTH', 8),
-    'password_require_uppercase' => env('AUTH_MODULE_PASSWORD_REQUIRE_UPPERCASE', false),
-    'password_require_lowercase' => env('AUTH_MODULE_PASSWORD_REQUIRE_LOWERCASE', false),
-    'password_require_numbers' => env('AUTH_MODULE_PASSWORD_REQUIRE_NUMBERS', false),
-    'password_require_symbols' => env('AUTH_MODULE_PASSWORD_REQUIRE_SYMBOLS', false),
 
     /*
     |--------------------------------------------------------------------------

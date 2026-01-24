@@ -18,10 +18,20 @@ enum AuthErrorCode: string
     
     // Logout errors
     case LOGOUT_FAILED = 'LOGOUT_FAILED';
+
+    // Authentication / Authorization (401, 403)
+    case UNAUTHORIZED = 'UNAUTHORIZED';
+    case FORBIDDEN = 'FORBIDDEN';
+
+    // Rate limiting
+    case RATE_LIMIT_EXCEEDED = 'RATE_LIMIT_EXCEEDED';
     
     // User retrieval errors
     case USER_RETRIEVAL_FAILED = 'USER_RETRIEVAL_FAILED';
     case USER_NOT_FOUND = 'USER_NOT_FOUND';
+
+    // HTTP / route errors
+    case NOT_FOUND = 'NOT_FOUND';
     
     // Phone verification errors
     case PHONE_VERIFICATION_FAILED = 'PHONE_VERIFICATION_FAILED';
@@ -47,6 +57,7 @@ enum AuthErrorCode: string
             self::LOGOUT_FAILED => 'Logout failed. Please try again.',
             self::USER_RETRIEVAL_FAILED => 'Unable to retrieve user information.',
             self::USER_NOT_FOUND => 'User not found.',
+            self::NOT_FOUND => 'The requested resource was not found.',
             self::PHONE_VERIFICATION_FAILED => 'Phone verification failed. Please try again later.',
             self::INVALID_VERIFICATION_CODE => 'Invalid or incorrect verification code.',
             self::EXPIRED_VERIFICATION_CODE => 'Verification code has expired (10 minutes).',
@@ -54,6 +65,9 @@ enum AuthErrorCode: string
             self::VERIFICATION_SMS_SEND_FAILED => 'Failed to send verification SMS. Please try again later.',
             self::UNABLE_TO_VERIFY_PHONE => 'Unable to verify phone number.',
             self::VALIDATION_ERROR => 'The given data was invalid.',
+            self::UNAUTHORIZED => 'Authentication required. Please provide a valid token.',
+            self::FORBIDDEN => 'You do not have permission to perform this action.',
+            self::RATE_LIMIT_EXCEEDED => 'Too many requests. Please try again later.',
         };
     }
 
@@ -63,7 +77,11 @@ enum AuthErrorCode: string
     public function statusCode(): int
     {
         return match ($this) {
-            self::USER_NOT_FOUND => 404,
+            self::USER_NOT_FOUND,
+            self::NOT_FOUND => 404,
+            self::UNAUTHORIZED => 401,
+            self::FORBIDDEN => 403,
+            self::RATE_LIMIT_EXCEEDED => 429,
             self::INVALID_PHONE,
             self::INVALID_LOGIN_CODE,
             self::EXPIRED_LOGIN_CODE,

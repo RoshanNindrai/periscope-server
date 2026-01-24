@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "bc22443d-31c5-40aa-9611-d0f5f4b05c1e",
     "name": "Periscope",
-    "description": "Mobile app authentication API collection for phone-based passwordless authentication with OTP verification",
+    "description": "Periscope API: phone-based auth (register, login, verify-login, logout, me), phone verification, health, and GraphQL (searchUsers). REST: `{ \"status\", \"message\", ... }`. Errors: `{ \"status\", \"error\", \"message\", \"errors\"? }`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_exporter_id": "1288169"
   },
@@ -36,11 +36,8 @@
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData).to.have.property('user');",
                   "    pm.expect(jsonData).to.have.property('token');",
-                  "    ",
                   "    if (jsonData.token) {",
                   "        pm.environment.set(\"auth_token\", jsonData.token);",
-                  "        pm.environment.set(\"user_id\", jsonData.user.id);",
-                  "        pm.environment.set(\"phone\", jsonData.user.phone);",
                   "    }",
                   "});"
                 ],
@@ -79,7 +76,7 @@
                 "register"
               ]
             },
-            "description": "Register a new user with phone number. After registration, user receives SMS with verification code.\n\n**Expected Response Status**: `REGISTERED`\n\n**Note**: Phone number must be in E.164 format (e.g., +14155552671)"
+            "description": "Register a new user with phone number. After registration, user receives SMS with verification code. Phone must be E.164 (e.g. +14155552671).\n\n**Expected Response Status**: `REGISTERED`\n\n**Error States**:\n- `VALIDATION_ERROR` (422) - Invalid/missing name, username, phone, or duplicate phone\n- `REGISTRATION_FAILED` (500) - Server error"
           },
           "response": []
         },
@@ -140,7 +137,7 @@
                 "login"
               ]
             },
-            "description": "Step 1 of login: Send OTP code to user's phone. User will receive 6-digit code via SMS.\n\n**Expected Response Status**: `LOGIN_CODE_SENT`\n\n**Error States**:\n- `USER_NOT_FOUND` (404) - Phone number not registered\n- `LOGIN_CODE_SEND_FAILED` (500) - Failed to send SMS\n- `LOGIN_FAILED` (500) - Server error\n\n**Note**: Extract the 6-digit code from storage/logs/laravel.log during testing"
+            "description": "Step 1 of login: Send OTP to user's phone. Phone must be E.164.\n\n**Expected Response Status**: `LOGIN_CODE_SENT`\n\n**Error States**:\n- `VALIDATION_ERROR` (422) - Invalid or missing phone\n- `USER_NOT_FOUND` (404) - Phone not registered\n- `LOGIN_CODE_SEND_FAILED` (500) - Failed to send SMS\n- `LOGIN_FAILED` (500) - Server error"
           },
           "response": []
         },
@@ -170,10 +167,8 @@
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData).to.have.property('user');",
                   "    pm.expect(jsonData).to.have.property('token');",
-                  "    ",
                   "    if (jsonData.token) {",
                   "        pm.environment.set(\"auth_token\", jsonData.token);",
-                  "        pm.environment.set(\"user_id\", jsonData.user.id);",
                   "    }",
                   "});"
                 ],
@@ -212,7 +207,7 @@
                 "verify-login"
               ]
             },
-            "description": "Step 2 of login: Verify OTP code received via SMS. Returns authentication token.\n\n**Expected Response Status**: `LOGGED_IN`\n\n**Error States**:\n- `INVALID_LOGIN_CODE` (422) - Invalid or incorrect code\n- `EXPIRED_LOGIN_CODE` (422) - Code expired (10 minutes)\n- `MAX_LOGIN_ATTEMPTS` (422) - Too many failed attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `LOGIN_FAILED` (500) - Server error\n\n**Note**: Get the 6-digit code from the SMS or storage/logs/laravel.log during testing"
+            "description": "Step 2 of login: Verify OTP (6 digits). Returns auth token. Store token for Bearer auth.\n\n**Expected Response Status**: `LOGGED_IN`\n\n**Error States**:\n- `VALIDATION_ERROR` (422) - Invalid/missing phone or code (code must be 6 chars)\n- `INVALID_LOGIN_CODE` (422) - Wrong code\n- `EXPIRED_LOGIN_CODE` (422) - Code expired (10 min)\n- `MAX_LOGIN_ATTEMPTS` (422) - Too many attempts (5 max)\n- `USER_NOT_FOUND` (404) - User not found\n- `LOGIN_FAILED` (500) - Server error"
           },
           "response": []
         },
@@ -265,7 +260,7 @@
                 "me"
               ]
             },
-            "description": "Get the currently authenticated user. Requires Bearer token.\n\n**Expected Response Status**: `USER_RETRIEVED`"
+            "description": "Get the currently authenticated user. Requires Bearer token.\n\n**Expected Response Status**: `USER_RETRIEVED`\n\n**Error States**:\n- `UNAUTHORIZED` (401) - Missing or invalid token\n- `USER_RETRIEVAL_FAILED` (500) - Server error"
           },
           "response": []
         },
@@ -318,7 +313,7 @@
                 "logout"
               ]
             },
-            "description": "Logout the current user. Revokes the authentication token.\n\n**Expected Response Status**: `LOGGED_OUT`"
+            "description": "Logout the current user. Revokes the authentication token.\n\n**Expected Response Status**: `LOGGED_OUT`\n\n**Error States**:\n- `UNAUTHORIZED` (401) - Missing or invalid token\n- `LOGOUT_FAILED` (500) - Server error"
           },
           "response": []
         }
@@ -438,7 +433,7 @@
                 "resend-verification-sms"
               ]
             },
-            "description": "Resend phone verification SMS. Requires authentication.\n\n**Expected Response States**:\n- `VERIFICATION_SMS_SENT` - SMS sent successfully\n- `PHONE_ALREADY_VERIFIED` - Phone already verified\n\n**Error States**:\n- `VERIFICATION_SMS_SEND_FAILED` (500) - Failed to send SMS"
+            "description": "Resend phone verification SMS. Requires authentication.\n\n**Expected Response States**:\n- `VERIFICATION_SMS_SENT` - SMS sent successfully\n- `PHONE_ALREADY_VERIFIED` - Phone already verified\n\n**Error States**:\n- `UNAUTHORIZED` (401) - Missing or invalid token\n- `VERIFICATION_SMS_SEND_FAILED` (500) - Failed to send SMS"
           },
           "response": []
         }
@@ -447,6 +442,7 @@
     },
     {
       "name": "Search",
+      "description": "User search via GraphQL only. Requires Bearer token.",
       "item": [
         {
           "name": "Search Users",
@@ -459,19 +455,15 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test(\"Response has correct structure\", function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('status');",
-                  "    pm.expect(jsonData).to.have.property('message');",
-                  "    pm.expect(jsonData).to.have.property('data');",
-                  "    pm.expect(jsonData).to.have.property('meta');",
-                  "});",
-                  "",
-                  "pm.test(\"Meta has pagination info\", function () {",
-                  "    var jsonData = pm.response.json();",
-                  "    pm.expect(jsonData.meta).to.have.property('current_page');",
-                  "    pm.expect(jsonData.meta).to.have.property('per_page');",
-                  "    pm.expect(jsonData.meta).to.have.property('total');",
+                  "pm.test(\"GraphQL data.searchUsers has status, message, data, meta\", function () {",
+                  "    var j = pm.response.json();",
+                  "    pm.expect(j).to.have.property('data');",
+                  "    pm.expect(j.data).to.have.property('searchUsers');",
+                  "    var s = j.data.searchUsers;",
+                  "    pm.expect(s).to.have.property('status');",
+                  "    pm.expect(s).to.have.property('message');",
+                  "    pm.expect(s).to.have.property('data');",
+                  "    pm.expect(s).to.have.property('meta');",
                   "});"
                 ],
                 "type": "text/javascript"
@@ -479,8 +471,13 @@
             }
           ],
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
               {
                 "key": "Accept",
                 "value": "application/json",
@@ -492,25 +489,25 @@
                 "type": "text"
               }
             ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"query SearchUsers($q: String!) { searchUsers(q: $q) { status message data { id name username phoneVerifiedAt } meta { currentPage perPage total lastPage } } }\",\n  \"variables\": { \"q\": \"{{search_term}}\" }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
             "url": {
-              "raw": "{{base_url}}/api/users/search?q=john",
+              "raw": "{{base_url}}/graphql",
               "host": [
                 "{{base_url}}"
               ],
               "path": [
-                "api",
-                "users",
-                "search"
-              ],
-              "query": [
-                {
-                  "key": "q",
-                  "value": "john",
-                  "description": "Search term (minimum 2 characters)"
-                }
+                "graphql"
               ]
             },
-            "description": "Search for users by username or name. Returns users matching the search term as a prefix.\n\n**Authentication Required:** Yes (Bearer token)\n\n**Rate Limit:** 30 requests per minute\n\n**Search Strategy:**\n1. Exact username match (highest priority)\n2. Username prefix match\n3. Name prefix match\n\n**Query Parameters:**\n- `q` (required): Search term, minimum 2 characters, maximum 100 characters\n\n**Response:**\n- `status`: Response status (users_found, no_results_found)\n- `message`: Human-readable message\n- `data`: Array of user objects\n- `meta`: Pagination metadata"
+            "description": "Search users via GraphQL (Lighthouse). Requires Bearer token.\n\n**Query:** searchUsers(q: String!)\n**Variables:** { \"q\": \"{{search_term}}\" } (min 2, max 100 chars)\n\n**Success:** data.searchUsers { status, message, data, meta }\n**Errors:** errors[].extensions.code → UNAUTHORIZED | VALIDATION_ERROR | SEARCH_FAILED"
           },
           "response": []
         }
@@ -519,6 +516,36 @@
     {
       "name": "Health",
       "item": [
+        {
+          "name": "Get API Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () { pm.response.to.have.status(200); });",
+                  "pm.test(\"Response has message and endpoints\", function () {",
+                  "    const j = pm.response.json();",
+                  "    pm.expect(j).to.have.property('message');",
+                  "    pm.expect(j).to.have.property('endpoints');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Accept", "value": "application/json" }],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Root: returns message, version, and list of endpoints.\n\n**Response:** { message, version, endpoints, documentation }"
+          },
+          "response": []
+        },
         {
           "name": "Health Check",
           "event": [
@@ -572,15 +599,6 @@
   ],
   "event": [
     {
-      "listen": "prerequest",
-      "script": {
-        "type": "text/javascript",
-        "exec": [
-          ""
-        ]
-      }
-    },
-    {
       "listen": "test",
       "script": {
         "type": "text/javascript",
@@ -605,11 +623,6 @@
       "type": "string"
     },
     {
-      "key": "user_id",
-      "value": "",
-      "type": "string"
-    },
-    {
       "key": "phone",
       "value": "+14155552671",
       "type": "string"
@@ -622,6 +635,11 @@
     {
       "key": "verification_code",
       "value": "",
+      "type": "string"
+    },
+    {
+      "key": "search_term",
+      "value": "alice",
       "type": "string"
     }
   ]

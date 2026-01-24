@@ -1,0 +1,65 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Periscope\AuthModule\Services;
+
+use App\Contracts\UserRepositoryInterface;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Periscope\AuthModule\Contracts\VerificationCodeGeneratorInterface;
+use Periscope\AuthModule\Notifications\VerifyPhoneNotification;
+use Periscope\AuthModule\Support\VerificationCodeRepositoryFactory;
+use Throwable;
+
+final class RegistrationService
+{
+    public function __construct(
+        private readonly string $tokenName,
+        private readonly VerificationCodeGeneratorInterface $codeGenerator,
+        private readonly VerificationCodeRepositoryFactory $codeRepoFactory,
+        private readonly UserRepositoryInterface $userRepository,
+    ) {}
+
+    /**
+     * @param  array{name: string, username: string, phone: string}  $validated
+     * @return array{user: \Illuminate\Contracts\Auth\Authenticatable, token: string}
+     *
+     * @throws Throwable
+     */
+    public function register(array $validated): array
+    {
+        $phone = phone($validated['phone'])->formatE164();
+
+        DB::beginTransaction();
+        try {
+            $user = $this->userRepository->create([
+                'name' => $validated['name'],
+                'username' => $validated['username'],
+                'phone' => $phone,
+            ]);
+
+            $code = $this->codeGenerator->generate();
+            $repo = $this->codeRepoFactory->forPhone();
+            $repo->delete($phone);
+            $repo->store($phone, $code);
+
+            try {
+                $user->notify(new VerifyPhoneNotification($code));
+            } catch (Throwable $e) {
+                Log::warning('Failed to queue verification SMS', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            $token = $user->createToken($this->tokenName)->plainTextToken;
+            DB::commit();
+
+            return ['user' => $user, 'token' => $token];
+        } catch (Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+    }
+}

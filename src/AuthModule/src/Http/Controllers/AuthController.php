@@ -1,74 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Periscope\AuthModule\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Contracts\UserRepositoryInterface;
+use App\Support\Http\ApiResponse;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Periscope\AuthModule\Notifications\VerifyPhoneNotification;
-use Periscope\AuthModule\Notifications\LoginOtpNotification;
-use Periscope\AuthModule\Enums\AuthResponseState;
-use Periscope\AuthModule\Enums\AuthErrorCode;
 use Illuminate\Validation\ValidationException;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Periscope\AuthModule\Constants\AuthModuleConstants;
+use Periscope\AuthModule\Contracts\PhoneHasherInterface;
+use Periscope\AuthModule\Enums\AuthErrorCode;
+use Periscope\AuthModule\Enums\AuthResponseState;
+use Periscope\AuthModule\Exceptions\AuthModuleException;
+use Periscope\AuthModule\Services\LoginOtpService;
+use Periscope\AuthModule\Services\PhoneVerificationService;
+use Periscope\AuthModule\Services\RegistrationService;
+use Periscope\AuthModule\Support\PhoneMasker;
 use Throwable;
 
 class AuthController extends Controller
 {
-    use AuthorizesRequests;
+    public function __construct(
+        private readonly RegistrationService $registrationService,
+        private readonly LoginOtpService $loginOtpService,
+        private readonly PhoneVerificationService $phoneVerificationService,
+        private readonly PhoneHasherInterface $phoneHasher,
+        private readonly UserRepositoryInterface $userRepository,
+    ) {}
 
-    /**
-     * Get the user model class name from config
-     */
-    protected function getUserModel(): string
-    {
-        return config('auth-module.user_model', \App\Models\User::class);
-    }
-
-    /**
-     * Get the token name from config
-     */
-    protected function getTokenName(): string
-    {
-        return config('auth-module.token_name', 'periscope-auth-token');
-    }
-
-    /**
-     * Generate a random 6-digit verification code
-     */
-    protected function generateVerificationCode(): string
-    {
-        return str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Mask phone number for logging (show last 4 digits only)
-     *
-     * @param  string|null  $phone
-     * @return string
-     */
-    protected function maskPhone(?string $phone): string
-    {
-        if (!$phone || strlen($phone) <= 4) {
-            return '****';
-        }
-        
-        return str_repeat('*', strlen($phone) - 4) . substr($phone, -4);
-    }
-
-    protected function phoneHash(string $phone): string
-    {
-        return hash('sha256', $phone);
-    }
-
-    /**
-     * Register a new user
-     */
     public function register(Request $request): JsonResponse
     {
-        $userModel = $this->getUserModel();
-
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
@@ -77,564 +41,158 @@ class AuthController extends Controller
                     'required',
                     'string',
                     'phone:AUTO',
-                    function (string $attr, mixed $value, \Closure $fail) use ($userModel): void {
+                    function (string $attr, mixed $value, \Closure $fail): void {
                         $p = phone($value)->formatE164();
-                        if ($userModel::where('phone_hash', $this->phoneHash($p))->exists()) {
+                        if ($this->userRepository->existsByPhoneHash($this->phoneHasher->hash($p))) {
                             $fail(__('validation.unique', ['attribute' => 'phone']));
                         }
                     },
                 ],
             ]);
         } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::VALIDATION_ERROR, $e->errors());
         }
 
         try {
-            DB::beginTransaction();
-
-            // Format phone to E.164
-            $phone = phone($validated['phone'])->formatE164();
-
-            $user = $userModel::create([
-                'name' => $validated['name'],
-                'username' => $validated['username'],
-                'phone' => $phone,
-            ]);
-
-            // Generate and store verification code
-            $code = $this->generateVerificationCode();
-            
-            // Delete any existing verification codes for this phone
-            DB::table('phone_verification_codes')->where('phone', $user->phone)->delete();
-            
-            // Store new verification code
-            DB::table('phone_verification_codes')->insert([
-                'phone' => $user->phone,
-                'code' => $code,
-                'attempts' => 0,
-                'created_at' => now(),
-            ]);
-
-            // Send phone verification notification (queued)
-            try {
-                $user->notify(new VerifyPhoneNotification($code));
-            } catch (Throwable $e) {
-                // Log but don't fail registration if SMS fails
-                Log::warning('Failed to queue verification SMS', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            $token = $user->createToken($this->getTokenName())->plainTextToken;
-
-            DB::commit();
-
-            $state = AuthResponseState::REGISTERED;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-                'user' => $user,
-                'token' => $token,
+            $result = $this->registrationService->register($validated);
+            return ApiResponse::success(AuthResponseState::REGISTERED, [
+                'user' => $result['user'],
+                'token' => $result['token'],
             ], 201);
         } catch (Throwable $e) {
-            DB::rollBack();
             Log::error('User registration failed', [
-                'phone' => $this->maskPhone($validated['phone'] ?? null),
+                'phone' => PhoneMasker::mask($validated['phone'] ?? null),
                 'exception' => get_class($e),
                 'message' => $e->getMessage(),
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
             ]);
             report($e);
-
-            $error = AuthErrorCode::REGISTRATION_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::REGISTRATION_FAILED);
         }
     }
 
-    /**
-     * Send login OTP code to user's phone
-     */
     public function login(Request $request): JsonResponse
     {
-        $userModel = $this->getUserModel();
-        
         try {
             $validated = $request->validate([
                 'phone' => ['required', 'string', 'phone:AUTO'],
             ]);
         } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::VALIDATION_ERROR, $e->errors());
         }
 
         try {
-            // Format phone to E.164
-            $phone = phone($validated['phone'])->formatE164();
-
-            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
-
-            if (!$user) {
-                $error = AuthErrorCode::USER_NOT_FOUND;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Generate and store login code
-            $code = $this->generateVerificationCode();
-
-            // Delete any existing login codes for this phone
-            DB::table('login_verification_codes')->where('phone', $user->phone)->delete();
-            
-            // Store new login code
-            DB::table('login_verification_codes')->insert([
-                'phone' => $user->phone,
-                'code' => $code,
-                'attempts' => 0,
-                'created_at' => now(),
-            ]);
-
-            // Send login OTP notification (queued)
-            try {
-                $user->notify(new LoginOtpNotification($code));
-            } catch (Throwable $e) {
-                Log::warning('Failed to queue login SMS', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                $error = AuthErrorCode::LOGIN_CODE_SEND_FAILED;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            $state = AuthResponseState::LOGIN_CODE_SENT;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
+            $this->loginOtpService->sendOtp($validated['phone']);
+            return ApiResponse::success(AuthResponseState::LOGIN_CODE_SENT);
+        } catch (AuthModuleException $e) {
+            return ApiResponse::error($e->getAuthErrorCode(), $e->getErrors());
         } catch (Throwable $e) {
             Log::error('Login code send failed', [
-                'phone' => $this->maskPhone($validated['phone'] ?? null),
+                'phone' => PhoneMasker::mask($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::LOGIN_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::LOGIN_FAILED);
         }
     }
 
-    /**
-     * Verify login OTP code and authenticate user
-     */
     public function verifyLogin(Request $request): JsonResponse
     {
-        $userModel = $this->getUserModel();
-
         try {
             $validated = $request->validate([
                 'phone' => ['required', 'string', 'phone:AUTO'],
-                'code' => 'required|string|size:6',
+                'code' => 'required|string|size:' . AuthModuleConstants::CODE_LENGTH,
             ]);
         } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::VALIDATION_ERROR, $e->errors());
         }
 
         try {
-            // Format phone to E.164
-            $phone = phone($validated['phone'])->formatE164();
-
-            // Get user
-            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
-
-            if (!$user) {
-                $error = AuthErrorCode::USER_NOT_FOUND;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Get login code record
-            $codeRecord = DB::table('login_verification_codes')
-                ->where('phone', $phone)
-                ->first();
-
-            if (!$codeRecord) {
-                $error = AuthErrorCode::INVALID_LOGIN_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if code has expired (10 minutes)
-            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
-            if (now()->diffInMinutes($createdAt) > 10) {
-                // Delete expired code
-                DB::table('login_verification_codes')->where('phone', $phone)->delete();
-                
-                $error = AuthErrorCode::EXPIRED_LOGIN_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if max attempts reached
-            if ($codeRecord->attempts >= 5) {
-                $error = AuthErrorCode::MAX_LOGIN_ATTEMPTS;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Verify code matches (constant-time comparison to prevent timing attacks)
-            if (!hash_equals($codeRecord->code, $request->code)) {
-                // Increment attempts
-                DB::table('login_verification_codes')
-                    ->where('phone', $phone)
-                    ->increment('attempts');
-                
-                $error = AuthErrorCode::INVALID_LOGIN_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Code is valid - create session token
-            $token = $user->createToken($this->getTokenName())->plainTextToken;
-
-            // Delete the login code
-            DB::table('login_verification_codes')->where('phone', $phone)->delete();
-
-            $state = AuthResponseState::LOGGED_IN;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-                'user' => $user,
-                'token' => $token,
-            ], 200);
+            $result = $this->loginOtpService->verify($validated['phone'], $validated['code']);
+            return ApiResponse::success(AuthResponseState::LOGGED_IN, [
+                'user' => $result['user'],
+                'token' => $result['token'],
+            ]);
+        } catch (AuthModuleException $e) {
+            return ApiResponse::error($e->getAuthErrorCode(), $e->getErrors());
         } catch (Throwable $e) {
             Log::error('Login verification failed', [
-                'phone' => $this->maskPhone($validated['phone'] ?? null),
+                'phone' => PhoneMasker::mask($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::LOGIN_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::LOGIN_FAILED);
         }
     }
 
-    /**
-     * Logout user
-     */
     public function logout(Request $request): JsonResponse
     {
         try {
             $request->user()->currentAccessToken()->delete();
-
-            $state = AuthResponseState::LOGGED_OUT;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
+            return ApiResponse::success(AuthResponseState::LOGGED_OUT);
         } catch (Throwable $e) {
             Log::error('Logout failed', [
-                'user_id' => $request->user()->id ?? null,
+                'user_id' => $request->user()?->id,
                 'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::LOGOUT_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::LOGOUT_FAILED);
         }
     }
 
-    /**
-     * Get authenticated user
-     */
     public function me(Request $request): JsonResponse
     {
         try {
-            $state = AuthResponseState::USER_RETRIEVED;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
+            return ApiResponse::success(AuthResponseState::USER_RETRIEVED, [
                 'user' => $request->user(),
-            ], 200);
-        } catch (Throwable $e) {
-            Log::error('Get user failed', [
-                'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::USER_RETRIEVAL_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+        } catch (Throwable $e) {
+            Log::error('Get user failed', ['error' => $e->getMessage()]);
+            return ApiResponse::error(AuthErrorCode::USER_RETRIEVAL_FAILED);
         }
     }
 
-    /**
-     * Verify phone number with 6-digit code
-     */
     public function verifyPhone(Request $request): JsonResponse
     {
-        $userModel = $this->getUserModel();
-
         try {
             $validated = $request->validate([
                 'phone' => ['required', 'string', 'phone:AUTO'],
-                'code' => 'required|string|size:6',
+                'code' => 'required|string|size:' . AuthModuleConstants::CODE_LENGTH,
             ]);
         } catch (ValidationException $e) {
-            $error = AuthErrorCode::VALIDATION_ERROR;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-                'errors' => $e->errors(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::VALIDATION_ERROR, $e->errors());
         }
 
         try {
-            // Format phone to E.164
-            $phone = phone($validated['phone'])->formatE164();
-
-            // Get user
-            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
-
-            if (!$user) {
-                $error = AuthErrorCode::USER_NOT_FOUND;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if already verified
-            if ($user->hasVerifiedPhone()) {
-                $state = AuthResponseState::PHONE_ALREADY_VERIFIED;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                ], 200);
-            }
-
-            // Get verification code record
-            $codeRecord = DB::table('phone_verification_codes')
-                ->where('phone', $phone)
-                ->first();
-
-            if (!$codeRecord) {
-                $error = AuthErrorCode::INVALID_VERIFICATION_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if code has expired (10 minutes)
-            $createdAt = \Carbon\Carbon::parse($codeRecord->created_at);
-            if (now()->diffInMinutes($createdAt) > 10) {
-                // Delete expired code
-                DB::table('phone_verification_codes')->where('phone', $phone)->delete();
-                
-                $error = AuthErrorCode::EXPIRED_VERIFICATION_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Check if max attempts reached
-            if ($codeRecord->attempts >= 5) {
-                $error = AuthErrorCode::MAX_VERIFICATION_ATTEMPTS;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Verify code matches (constant-time comparison to prevent timing attacks)
-            if (!hash_equals($codeRecord->code, $request->code)) {
-                // Increment attempts
-                DB::table('phone_verification_codes')
-                    ->where('phone', $phone)
-                    ->increment('attempts');
-                
-                $error = AuthErrorCode::INVALID_VERIFICATION_CODE;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            // Code is valid - mark phone as verified
-            if ($user->markPhoneAsVerified()) {
-                // Delete the verification code
-                DB::table('phone_verification_codes')->where('phone', $phone)->delete();
-                
-                $state = AuthResponseState::PHONE_VERIFIED;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                    'user' => $user->fresh(),
-                ], 200);
-            }
-
-            $error = AuthErrorCode::UNABLE_TO_VERIFY_PHONE;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            $result = $this->phoneVerificationService->verifyPhone($validated['phone'], $validated['code']);
+            return ApiResponse::success($result['state'], ['user' => $result['user']]);
+        } catch (AuthModuleException $e) {
+            return ApiResponse::error($e->getAuthErrorCode(), $e->getErrors());
         } catch (Throwable $e) {
             Log::error('Phone verification failed', [
-                'phone' => $this->maskPhone($validated['phone'] ?? null),
+                'phone' => PhoneMasker::mask($validated['phone'] ?? null),
                 'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::PHONE_VERIFICATION_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::PHONE_VERIFICATION_FAILED);
         }
     }
 
-    /**
-     * Resend phone verification code
-     */
     public function resendVerificationSms(Request $request): JsonResponse
     {
         try {
-            $user = $request->user();
-
-            if ($user->hasVerifiedPhone()) {
-                $state = AuthResponseState::PHONE_ALREADY_VERIFIED;
-                return response()->json([
-                    'status' => $state->value,
-                    'message' => $state->message(),
-                ], 200);
-            }
-
-            // Generate new verification code
-            $code = $this->generateVerificationCode();
-            
-            // Delete old verification code (invalidate previous)
-            DB::table('phone_verification_codes')->where('phone', $user->phone)->delete();
-            
-            // Store new verification code
-            DB::table('phone_verification_codes')->insert([
-                'phone' => $user->phone,
-                'code' => $code,
-                'attempts' => 0,
-                'created_at' => now(),
-            ]);
-
-            // Send SMS with new code
-            try {
-                $user->notify(new VerifyPhoneNotification($code));
-            } catch (Throwable $e) {
-                Log::warning('Failed to queue verification SMS', [
-                    'user_id' => $user->id,
-                    'error' => $e->getMessage(),
-                ]);
-
-                $error = AuthErrorCode::VERIFICATION_SMS_SEND_FAILED;
-                return response()->json([
-                    'status' => $error->value,
-                    'error' => $error->value,
-                    'message' => $error->message(),
-                ], $error->statusCode());
-            }
-
-            $state = AuthResponseState::VERIFICATION_SMS_SENT;
-            return response()->json([
-                'status' => $state->value,
-                'message' => $state->message(),
-            ], 200);
+            $state = $this->phoneVerificationService->resendCode($request->user());
+            return ApiResponse::success($state);
+        } catch (AuthModuleException $e) {
+            return ApiResponse::error($e->getAuthErrorCode(), $e->getErrors());
         } catch (Throwable $e) {
             Log::error('Resend verification SMS failed', [
-                'user_id' => $request->user()->id ?? null,
+                'user_id' => $request->user()?->id,
                 'error' => $e->getMessage(),
             ]);
-
-            $error = AuthErrorCode::VERIFICATION_SMS_SEND_FAILED;
-            return response()->json([
-                'status' => $error->value,
-                'error' => $error->value,
-                'message' => $error->message(),
-            ], $error->statusCode());
+            return ApiResponse::error(AuthErrorCode::VERIFICATION_SMS_SEND_FAILED);
         }
     }
 
-    /**
-     * Health check endpoint
-     */
     public function healthCheck(): JsonResponse
     {
-        $state = AuthResponseState::HEALTH_CHECK;
-        return response()->json([
-            'status' => $state->value,
-            'message' => $state->message(),
+        return ApiResponse::success(AuthResponseState::HEALTH_CHECK, [
             'timestamp' => now()->toIso8601String(),
-        ], 200);
+        ]);
     }
 }

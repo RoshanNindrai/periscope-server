@@ -118,4 +118,14 @@ class User extends Authenticatable implements SearchableUser
     {
         return $this->phone_verified_at;
     }
+
+    /**
+     * CamelCase accessor for GraphQL (phoneVerifiedAt). Reads from attributes
+     * to avoid recursion, since Laravel also uses this for 'phone_verified_at'.
+     */
+    public function getPhoneVerifiedAtAttribute(): ?Carbon
+    {
+        $raw = $this->attributes['phone_verified_at'] ?? null;
+        return $raw === null ? null : $this->asDateTime($raw);
+    }
 }

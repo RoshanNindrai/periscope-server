@@ -2,6 +2,8 @@
 
 Laravel API server with authentication module.
 
+> **Cursor / AI agents:** Read [`.cursor/rules/project-standards.mdc`](.cursor/rules/project-standards.mdc) before making changes. It defines SOLID, contracts, repository pattern, security (no PII in logs), performance, response structure, and mobile-first API standards.
+
 ## Features
 
 - ✅ User registration with phone number (passwordless)
@@ -54,8 +56,10 @@ Laravel API server with authentication module.
 ### Postman Collection
 
 Import the Postman collection for API testing:
-- Collection: `docs/postman/Periscope-Auth-API.postman_collection.json`
-- Environment: `docs/postman/Periscope-Auth-Environment.postman_environment.json`
+
+- **Collection:** `docs/postman/Periscope.postman_collection.json`
+
+Optional: create a Postman environment with `base_url` (e.g. `http://localhost:8000`), `phone`, `login_code`, `verification_code`, and `auth_token` (set automatically after Register or Login - Verify OTP).
 
 ### Environment Setup for Testing
 

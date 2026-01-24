@@ -15,31 +15,41 @@ return new class extends Migration
      */
     public function up(): void
     {
+        $isSqlite = Schema::getConnection()->getDriverName() === 'sqlite';
+
         if (!Schema::hasColumn('users', 'phone_hash')) {
             Schema::table('users', function (Blueprint $table) {
                 $table->string('phone_hash', 64)->nullable()->after('phone');
             });
         }
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropUnique(['phone']);
-        });
+        try {
+            Schema::table('users', function (Blueprint $table) {
+                $table->dropUnique(['phone']);
+            });
+        } catch (\Throwable) {
+            // Ignore if unique doesn't exist (e.g. SQLite)
+        }
 
-        DB::statement('ALTER TABLE users MODIFY phone TEXT');
+        if (!$isSqlite) {
+            DB::statement('ALTER TABLE users MODIFY phone TEXT');
 
-        foreach (DB::table('users')->get() as $row) {
-            $plain = $row->phone;
-            DB::table('users')->where('id', $row->id)->update([
-                'phone_hash' => hash('sha256', $plain),
-                'phone' => Crypt::encryptString($plain),
-            ]);
+            foreach (DB::table('users')->get() as $row) {
+                $plain = $row->phone;
+                DB::table('users')->where('id', $row->id)->update([
+                    'phone_hash' => hash('sha256', $plain),
+                    'phone' => Crypt::encryptString($plain),
+                ]);
+            }
         }
 
         Schema::table('users', function (Blueprint $table) {
             $table->unique('phone_hash');
         });
 
-        DB::statement('ALTER TABLE users MODIFY phone_hash VARCHAR(64) NOT NULL');
+        if (!$isSqlite) {
+            DB::statement('ALTER TABLE users MODIFY phone_hash VARCHAR(64) NOT NULL');
+        }
     }
 
     /**

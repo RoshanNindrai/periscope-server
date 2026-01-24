@@ -3,10 +3,11 @@
 namespace Periscope\AuthModule\Notifications\Channels\Providers;
 
 use Aws\Sns\SnsClient;
+use Periscope\AuthModule\Support\PhoneMasker;
 use Aws\Exception\AwsException;
 use Illuminate\Support\Facades\Log;
 
-class SnsSmsProvider implements SmsProviderInterface
+class SnsSmsProvider
 {
     /**
      * Singleton SNS client instance
@@ -26,7 +27,7 @@ class SnsSmsProvider implements SmsProviderInterface
         // Local development mode: Log SMS instead of sending (never log message body / OTP)
         if (config('app.env') === 'local' && !config('auth-module.aws.sns.key')) {
             Log::info('📱 LOCAL DEV: SMS would be sent via AWS SNS', [
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
                 'message_length' => strlen($message),
                 'provider' => 'sns',
             ]);
@@ -43,13 +44,13 @@ class SnsSmsProvider implements SmsProviderInterface
             ]);
 
             Log::info('SMS sent successfully via AWS SNS', [
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
                 'message_id' => $result['MessageId'] ?? null,
                 'provider' => 'sns',
             ]);
         } catch (AwsException $e) {
             Log::error('Failed to send SMS via AWS SNS', [
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
                 'error' => $e->getMessage(),
                 'aws_error_code' => $e->getAwsErrorCode(),
                 'provider' => 'sns',
@@ -58,7 +59,7 @@ class SnsSmsProvider implements SmsProviderInterface
             throw $e;
         } catch (\Throwable $e) {
             Log::error('Unexpected error sending SMS via AWS SNS', [
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
                 'error' => $e->getMessage(),
                 'provider' => 'sns',
             ]);
@@ -88,18 +89,4 @@ class SnsSmsProvider implements SmsProviderInterface
         return self::$snsClient;
     }
 
-    /**
-     * Mask phone number for logging (show last 4 digits only)
-     *
-     * @param  string  $phone
-     * @return string
-     */
-    protected function maskPhone(string $phone): string
-    {
-        if (strlen($phone) <= 4) {
-            return '****';
-        }
-        
-        return str_repeat('*', strlen($phone) - 4) . substr($phone, -4);
-    }
 }

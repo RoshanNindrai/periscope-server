@@ -5,6 +5,7 @@ namespace Periscope\AuthModule\Notifications\Channels;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\Log;
 use Periscope\AuthModule\Notifications\Channels\Providers\SnsSmsProvider;
+use Periscope\AuthModule\Support\PhoneMasker;
 
 class SmsChannel
 {
@@ -37,27 +38,12 @@ class SmsChannel
             $provider->send($phone, $message);
         } catch (\Throwable $e) {
             Log::error('Failed to send SMS notification', [
-                'phone' => $this->maskPhone($phone),
+                'phone' => PhoneMasker::mask($phone),
                 'error' => $e->getMessage(),
                 'notification' => get_class($notification),
             ]);
 
             throw new \RuntimeException('SMS delivery failed.', 0, $e);
         }
-    }
-
-    /**
-     * Mask phone number for logging (show last 4 digits only)
-     *
-     * @param  string  $phone
-     * @return string
-     */
-    protected function maskPhone(string $phone): string
-    {
-        if (strlen($phone) <= 4) {
-            return '****';
-        }
-        
-        return str_repeat('*', strlen($phone) - 4) . substr($phone, -4);
     }
 }

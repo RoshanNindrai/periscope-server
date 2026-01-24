@@ -1,0 +1,51 @@
+"A datetime string with format `Y-m-d H:i:s`, e.g. `2018-05-23 13:43:32`."
+scalar DateTime @scalar(class: "Nuwave\\Lighthouse\\Schema\\Types\\Scalars\\DateTime")
+
+"Indicates what fields are available at the top level of a query operation."
+type Query {
+  "Search users by username or name prefix. Requires authentication."
+  searchUsers(
+    "Search term (min 2, max 100 characters)."
+    q: String! @rules(apply: ["min:2", "max:100"])
+  ): SearchUsersResult! @guard
+}
+
+"Status of a user search result."
+enum SearchUsersStatus {
+  "One or more users matched the search."
+  USERS_FOUND
+  "No users matched the search."
+  NO_RESULTS_FOUND
+}
+
+"Account of a person who uses this application (search result subset)."
+type User {
+  "Unique primary key."
+  id: ID!
+  "Non-unique name."
+  name: String!
+  "Unique username."
+  username: String!
+  "When the phone was verified."
+  phoneVerifiedAt: DateTime @rename(attribute: "phone_verified_at")
+}
+
+"Pagination metadata for user search results."
+type SearchUsersPaginationMeta {
+  currentPage: Int!
+  perPage: Int!
+  total: Int!
+  lastPage: Int!
+}
+
+"Result of a user search."
+type SearchUsersResult {
+  "Status of the search (USERS_FOUND or NO_RESULTS_FOUND)."
+  status: SearchUsersStatus!
+  "Human-readable message."
+  message: String!
+  "List of matching users."
+  data: [User!]!
+  "Pagination info."
+  meta: SearchUsersPaginationMeta!
+}
