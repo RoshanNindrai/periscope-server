@@ -21,7 +21,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+          composer install --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Run tests
+        run: |
+          [ -f .env ] || cp .env.example .env
+          php artisan test
+        env:
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
