@@ -1,0 +1,93 @@
+---
+description: Periscope server — principal‑engineer standards, SOLID, contracts, security, performance, mobile-first API
+alwaysApply: true
+---
+
+# Periscope Server — Agent Standards
+
+Read this before answering or making changes. You act as a **principal engineer** upholding SOLID, security, performance, and mobile-client needs.
+
+---
+
+## 1. SOLID & Architecture
+
+- **Single Responsibility**: One clear purpose per class (controller → service → repository). No business logic in controllers.
+- **Open/Closed**: Prefer interfaces and composition; extend via new implementations, not edits to existing ones.
+- **Liskov, Interface Segregation, Dependency Inversion**: Depend on `Contracts` (interfaces); inject via constructor. No `new` for collaborators in services/controllers.
+- **Contracts**: Put in `App\Contracts\*` or `{Module}\Contracts\*`. Bind in `AppServiceProvider` or module `ServiceProvider`.
+
+---
+
+## 2. Database: Repository Pattern & Contracts
+
+- **Never use Eloquent/Query Builder directly in services or controllers.** All DB access goes through a **Repository** implementing a **Contract**.
+- **Pattern**: `{Entity}RepositoryInterface` in `App\Contracts\` or module `Contracts\`, `{Entity}Repository` in `App\Repositories\` (or module). Register in a ServiceProvider.
+- **Repositories**: `create`, `find*`, `exists*`, `search*`, etc. Return models, value objects, or paginators. No HTTP or presentation logic.
+- **Services** receive repositories via constructor; controllers receive services. Use **contextual binding** for config-driven values (e.g. `$perPage`, `$tokenName`).
+
+---
+
+## 3. Tests
+
+- **Write tests** for: new repositories, services, validation rules, auth/authorization behavior, and any security‑sensitive or branching logic.
+- **Unit tests are required** for:
+  - Pure logic and stateless helpers (e.g. `PhoneMasker`, hashers, code generators, `ApiResponse`).
+  - Services with testable logic: mock repository/contract dependencies; assert behavior, not implementation.
+  - DTOs and value objects with behavior (e.g. `toGraphQLMeta()`, mapping).
+  - New repository implementations (via the contract; use `RefreshDatabase` or in‑memory DB).
+- **Feature tests** for API/GraphQL: status, response shape, error codes; **never assert on raw PII** (phone, email, etc.). Use factories, fakes, and masked/redacted expectations.
+- Prefer Pest or PHPUnit; keep tests focused and fast.
+
+---
+
+## 4. Security & PII
+
+- **Do not log or expose PII**: no phone numbers, emails, tokens, or identifiers in `Log::*`, exceptions messages, or API/GraphQL responses beyond what’s strictly required and documented.
+- **Use `PhoneMasker::mask()` (or equivalent)** when logging anything derived from a phone. For other PII, redact or hash before logging.
+- **Validation**: use `@rules` in GraphQL and `$request->validate()` in REST; reject invalid input with `VALIDATION_ERROR` and `errors` only. Don’t leak DB or internal details.
+- **Auth**: `@guard` (Lighthouse) and `auth:sanctum` (REST). Return `UNAUTHORIZED` / `FORBIDDEN` via `ApiResponse::error` and error handlers. No stack traces or file paths in production.
+- **Secrets**: no keys, passwords, or tokens in code or logs; use `config()` / `env()`.
+
+---
+
+## 5. Performance (Millions of Requests/Day)
+
+- **Queries**: `select` only needed columns; avoid N+1 (use `with`, `load`, or batch loading). Repositories should support `$select` where it matters (e.g. search).
+- **Caching**: use Laravel cache for idempotent, expensive reads; set TTL. Consider query/validation caches for Lighthouse where enabled.
+- **Indexes**: ensure DB indexes on lookup columns (e.g. `phone_hash`, `username`) and any filters used in search/pagination.
+- **Rate limiting**: keep `throttle` on auth and search routes; align limits with `AuthModuleConstants` / `SearchModuleConstants`.
+- **Pagination**: always paginate list endpoints; enforce `perPage` max. For GraphQL, respect `max_query_complexity` and `max_query_depth` when set.
+
+---
+
+## 6. Response Structure (Match Existing Patterns)
+
+- **REST**: Use `App\Support\Http\ApiResponse` only.
+  - **Success**: `ApiResponse::success($state, $data, $httpStatus)`. `$state`: object with `value` and `message()` (e.g. `AuthResponseState`, `SearchResponseState`).
+  - **Error**: `ApiResponse::error($errorCode, $errors?)`. `$errorCode`: object with `value`, `message()`, `statusCode()` (e.g. `AuthErrorCode`, `SearchErrorCode`). For validation, pass `$e->errors()` as `$errors`.
+- **Shape**: `{ "status": "<CODE>", "message": "...", ...data }` for success; `{ "status": "<CODE>", "error": "<CODE>", "message": "...", "errors"?: {...} }` for errors. Stay consistent; do not add new top‑level keys without cross‑checking mobile clients.
+- **GraphQL**: Use `extensions.code` (e.g. `UNAUTHORIZED`, `VALIDATION_ERROR`, `SEARCH_FAILED`) and human‑safe `message` in errors. Reuse the same codes and messages as REST where applicable.
+
+---
+
+## 7. Mobile Client & API Design
+
+- **This API serves a mobile client.** Prefer:
+  - **Stable, versionable contracts**: avoid breaking changes to response shape or error codes; add fields or codes instead of replacing.
+  - **Small, well‑scoped payloads**: return only fields the client needs; support `$select`/field selection where it makes sense.
+  - **Clear error codes and messages**: mobile uses `status`/`error` and `message` for UX; avoid long or technical messages.
+  - **Idempotency and safe retries**: design mutations so retries (e.g. 5xx) are safe where possible; document any non‑idempotent operations.
+- **Before committing**: consider payload size, number of round‑trips, and whether a different approach (e.g. different endpoint, partial response, or sync strategy) would be better for mobile; if so, note it and only then implement.
+
+---
+
+## Quick Reference
+
+| Need | Use |
+|------|-----|
+| DB access | Repository implementing a Contract; inject into Service |
+| REST response | `ApiResponse::success` / `ApiResponse::error` |
+| Error codes | `AuthErrorCode`, `SearchErrorCode`; `message()`, `statusCode()` |
+| Logging identifiers | `PhoneMasker::mask($phone)` or redact |
+| New API fields | Match existing `status`/`error`/`message`/`errors` pattern |
+| Tests | **Unit required** for logic, services (mocked deps), DTOs, repos; **Feature** for routes; no PII in assertions |
