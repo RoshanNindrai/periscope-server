@@ -3,10 +3,11 @@
 namespace Periscope\AuthModule\Notifications;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeEncrypted;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
-class VerifyPhoneNotification extends Notification
+class VerifyPhoneNotification extends Notification implements ShouldQueue, ShouldBeEncrypted
 {
     use Queueable;
 

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -31,8 +32,33 @@ class User extends Authenticatable implements SearchableUser
      * @var list<string>
      */
     protected $hidden = [
-        //
+        'phone',     // PII: encrypted at rest, do not expose in API
+        'phone_hash', // used only for lookup
     ];
+
+    /**
+     * Encrypt phone at rest and set phone_hash for lookup.
+     */
+    protected function setPhoneAttribute(string $value): void
+    {
+        $this->attributes['phone'] = Crypt::encryptString($value);
+        $this->attributes['phone_hash'] = hash('sha256', $value);
+    }
+
+    /**
+     * Decrypt phone when needed (e.g. for SMS).
+     */
+    protected function getPhoneAttribute(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        try {
+            return Crypt::decryptString($value);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
 
     /**
      * Get the attributes that should be cast.

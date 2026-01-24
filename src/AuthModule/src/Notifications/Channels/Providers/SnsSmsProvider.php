@@ -23,11 +23,11 @@ class SnsSmsProvider implements SmsProviderInterface
      */
     public function send(string $phone, string $message): void
     {
-        // Local development mode: Log SMS instead of sending
+        // Local development mode: Log SMS instead of sending (never log message body / OTP)
         if (config('app.env') === 'local' && !config('auth-module.aws.sns.key')) {
             Log::info('📱 LOCAL DEV: SMS would be sent via AWS SNS', [
                 'phone' => $this->maskPhone($phone),
-                'message' => $message, // Message includes OTP, only log in local dev
+                'message_length' => strlen($message),
                 'provider' => 'sns',
             ]);
             return;

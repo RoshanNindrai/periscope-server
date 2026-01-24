@@ -57,18 +57,33 @@ class AuthController extends Controller
         return str_repeat('*', strlen($phone) - 4) . substr($phone, -4);
     }
 
+    protected function phoneHash(string $phone): string
+    {
+        return hash('sha256', $phone);
+    }
+
     /**
      * Register a new user
      */
     public function register(Request $request): JsonResponse
     {
         $userModel = $this->getUserModel();
-        
+
         try {
             $validated = $request->validate([
                 'name' => 'required|string|max:255',
                 'username' => 'required|string|min:3|max:30|unique:users|regex:/^[a-z0-9._]+$/',
-                'phone' => ['required', 'string', 'phone:AUTO', 'unique:users'],
+                'phone' => [
+                    'required',
+                    'string',
+                    'phone:AUTO',
+                    function (string $attr, mixed $value, \Closure $fail) use ($userModel): void {
+                        $p = phone($value)->formatE164();
+                        if ($userModel::where('phone_hash', $this->phoneHash($p))->exists()) {
+                            $fail(__('validation.unique', ['attribute' => 'phone']));
+                        }
+                    },
+                ],
             ]);
         } catch (ValidationException $e) {
             $error = AuthErrorCode::VALIDATION_ERROR;
@@ -132,8 +147,13 @@ class AuthController extends Controller
             DB::rollBack();
             Log::error('User registration failed', [
                 'phone' => $this->maskPhone($validated['phone'] ?? null),
-                'error' => $e->getMessage(),
+                'exception' => get_class($e),
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
             ]);
+            report($e);
 
             $error = AuthErrorCode::REGISTRATION_FAILED;
             return response()->json([
@@ -169,7 +189,7 @@ class AuthController extends Controller
             // Format phone to E.164
             $phone = phone($validated['phone'])->formatE164();
 
-            $user = $userModel::where('phone', $phone)->first();
+            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
 
             if (!$user) {
                 $error = AuthErrorCode::USER_NOT_FOUND;
@@ -182,7 +202,7 @@ class AuthController extends Controller
 
             // Generate and store login code
             $code = $this->generateVerificationCode();
-            
+
             // Delete any existing login codes for this phone
             DB::table('login_verification_codes')->where('phone', $user->phone)->delete();
             
@@ -258,8 +278,8 @@ class AuthController extends Controller
             $phone = phone($validated['phone'])->formatE164();
 
             // Get user
-            $user = $userModel::where('phone', $phone)->first();
-            
+            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
+
             if (!$user) {
                 $error = AuthErrorCode::USER_NOT_FOUND;
                 return response()->json([
@@ -431,8 +451,8 @@ class AuthController extends Controller
             $phone = phone($validated['phone'])->formatE164();
 
             // Get user
-            $user = $userModel::where('phone', $phone)->first();
-            
+            $user = $userModel::where('phone_hash', $this->phoneHash($phone))->first();
+
             if (!$user) {
                 $error = AuthErrorCode::USER_NOT_FOUND;
                 return response()->json([

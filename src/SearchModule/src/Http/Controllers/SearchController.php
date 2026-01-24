@@ -117,7 +117,7 @@ class SearchController extends Controller
 
         } catch (Throwable $e) {
             Log::error('User search failed', [
-                'search_term' => $searchTerm ?? null,
+                'search_term_length' => isset($searchTerm) ? strlen($searchTerm) : 0,
                 'error' => $e->getMessage(),
             ]);
 

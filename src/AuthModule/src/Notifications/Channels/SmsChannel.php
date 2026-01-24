@@ -31,7 +31,7 @@ class SmsChannel
         // Get message from notification
         $message = $notification->toSms($notifiable);
 
-        // Send via AWS SNS
+        // Send via AWS SNS. Rethrow with generic message so OTP never appears in failed_jobs.exception
         try {
             $provider = new SnsSmsProvider();
             $provider->send($phone, $message);
@@ -41,8 +41,8 @@ class SmsChannel
                 'error' => $e->getMessage(),
                 'notification' => get_class($notification),
             ]);
-            
-            throw $e;
+
+            throw new \RuntimeException('SMS delivery failed.', 0, $e);
         }
     }
 
