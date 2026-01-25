@@ -28,7 +28,7 @@ class ResendVerificationSmsTest extends TestCase
 
         $r = $this->actingAs($user, 'sanctum')->postJson('/api/resend-verification-sms');
         $r->assertStatus(200)->assertJsonPath('status', 'VERIFICATION_SMS_SENT');
-        $this->assertDatabaseHas('phone_verification_codes', ['phone' => '+15555550900']);
+        $this->assertDatabaseHas('phone_verification_codes', ['phone_hash' => hash('sha256', '+15555550900')]);
     }
 
     public function test_resend_returns_phone_already_verified_when_done(): void

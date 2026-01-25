@@ -7,6 +7,7 @@ namespace Periscope\AuthModule\Services;
 use App\Contracts\UserRepositoryInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Periscope\AuthModule\Contracts\PhoneHasherInterface;
 use Periscope\AuthModule\Contracts\VerificationCodeGeneratorInterface;
 use Periscope\AuthModule\Notifications\VerifyPhoneNotification;
 use Periscope\AuthModule\Support\VerificationCodeRepositoryFactory;
@@ -16,6 +17,7 @@ final class RegistrationService
 {
     public function __construct(
         private readonly string $tokenName,
+        private readonly PhoneHasherInterface $phoneHasher,
         private readonly VerificationCodeGeneratorInterface $codeGenerator,
         private readonly VerificationCodeRepositoryFactory $codeRepoFactory,
         private readonly UserRepositoryInterface $userRepository,
@@ -39,10 +41,11 @@ final class RegistrationService
                 'phone' => $phone,
             ]);
 
+            $phoneHash = $this->phoneHasher->hash($phone);
             $code = $this->codeGenerator->generate();
             $repo = $this->codeRepoFactory->forPhone();
-            $repo->delete($phone);
-            $repo->store($phone, $code);
+            $repo->delete($phoneHash);
+            $repo->store($phoneHash, $code);
 
             try {
                 $user->notify(new VerifyPhoneNotification($code));

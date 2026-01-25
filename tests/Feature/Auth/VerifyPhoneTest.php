@@ -22,7 +22,7 @@ class VerifyPhoneTest extends TestCase
     {
         $user = User::factory()->create(['phone' => '+447911123464']);
         DB::table('phone_verification_codes')->insert([
-            'phone' => '+447911123464',
+            'phone_hash' => hash('sha256', '+447911123464'),
             'code' => '123456',
             'attempts' => 0,
             'created_at' => now(),
@@ -55,7 +55,7 @@ class VerifyPhoneTest extends TestCase
     {
         User::factory()->create(['phone' => '+447911123466']);
         DB::table('phone_verification_codes')->insert([
-            'phone' => '+447911123466',
+            'phone_hash' => hash('sha256', '+447911123466'),
             'code' => '123456',
             'attempts' => 0,
             'created_at' => now(),

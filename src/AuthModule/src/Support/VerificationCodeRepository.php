@@ -13,28 +13,28 @@ final class VerificationCodeRepository implements VerificationCodeRepositoryInte
         private readonly string $table
     ) {}
 
-    public function store(string $phone, string $code): void
+    public function store(string $phoneHash, string $code): void
     {
         DB::table($this->table)->insert([
-            'phone' => $phone,
+            'phone_hash' => $phoneHash,
             'code' => $code,
             'attempts' => 0,
             'created_at' => now(),
         ]);
     }
 
-    public function find(string $phone): ?object
+    public function find(string $phoneHash): ?object
     {
-        return DB::table($this->table)->where('phone', $phone)->first();
+        return DB::table($this->table)->where('phone_hash', $phoneHash)->first();
     }
 
-    public function delete(string $phone): void
+    public function delete(string $phoneHash): void
     {
-        DB::table($this->table)->where('phone', $phone)->delete();
+        DB::table($this->table)->where('phone_hash', $phoneHash)->delete();
     }
 
-    public function incrementAttempts(string $phone): void
+    public function incrementAttempts(string $phoneHash): void
     {
-        DB::table($this->table)->where('phone', $phone)->increment('attempts');
+        DB::table($this->table)->where('phone_hash', $phoneHash)->increment('attempts');
     }
 }
