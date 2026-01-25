@@ -38,10 +38,11 @@ final class LoginOtpService
             throw new AuthModuleException(AuthErrorCode::USER_NOT_FOUND);
         }
 
+        $phoneHash = $this->phoneHasher->hash($phone);
         $code = $this->codeGenerator->generate();
         $repo = $this->codeRepoFactory->forLogin();
-        $repo->delete($phone);
-        $repo->store($phone, $code);
+        $repo->delete($phoneHash);
+        $repo->store($phoneHash, $code);
 
         try {
             $user->notify(new LoginOtpNotification($code));
@@ -65,8 +66,9 @@ final class LoginOtpService
             throw new AuthModuleException(AuthErrorCode::USER_NOT_FOUND);
         }
 
+        $phoneHash = $this->phoneHasher->hash($phone);
         $repo = $this->codeRepoFactory->forLogin();
-        $record = $repo->find($phone);
+        $record = $repo->find($phoneHash);
 
         if ($record === null) {
             throw new AuthModuleException(AuthErrorCode::INVALID_LOGIN_CODE);
@@ -74,7 +76,7 @@ final class LoginOtpService
 
         $createdAt = Carbon::parse($record->created_at);
         if (now()->diffInMinutes($createdAt) > AuthModuleConstants::CODE_EXPIRY_MINUTES) {
-            $repo->delete($phone);
+            $repo->delete($phoneHash);
             throw new AuthModuleException(AuthErrorCode::EXPIRED_LOGIN_CODE);
         }
 
@@ -83,12 +85,12 @@ final class LoginOtpService
         }
 
         if (!hash_equals($record->code, $code)) {
-            $repo->incrementAttempts($phone);
+            $repo->incrementAttempts($phoneHash);
             throw new AuthModuleException(AuthErrorCode::INVALID_LOGIN_CODE);
         }
 
         $token = $user->createToken($this->tokenName)->plainTextToken;
-        $repo->delete($phone);
+        $repo->delete($phoneHash);
 
         return ['user' => $user, 'token' => $token];
     }

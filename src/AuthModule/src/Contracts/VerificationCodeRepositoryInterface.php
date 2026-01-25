@@ -6,11 +6,11 @@ namespace Periscope\AuthModule\Contracts;
 
 interface VerificationCodeRepositoryInterface
 {
-    public function store(string $phone, string $code): void;
+    public function store(string $phoneHash, string $code): void;
 
-    public function find(string $phone): ?object;
+    public function find(string $phoneHash): ?object;
 
-    public function delete(string $phone): void;
+    public function delete(string $phoneHash): void;
 
-    public function incrementAttempts(string $phone): void;
+    public function incrementAttempts(string $phoneHash): void;
 }

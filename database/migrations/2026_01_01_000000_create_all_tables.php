@@ -11,7 +11,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Drop all tables if they exist (fresh start)
         Schema::dropIfExists('failed_jobs');
         Schema::dropIfExists('job_batches');
         Schema::dropIfExists('jobs');
@@ -24,22 +23,21 @@ return new class extends Migration
         Schema::dropIfExists('cache');
         Schema::dropIfExists('users');
 
-        // Create users table with all columns and indexes
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
             $table->string('username', 30)->unique();
-            $table->string('phone', 20)->unique();
+            $table->text('phone');
+            $table->string('phone_hash', 64)->unique();
             $table->timestamp('phone_verified_at')->nullable();
+            $table->timestamp('locked_at')->nullable();
             $table->timestamps();
-            
-            // Indexes
+
             $table->index('phone_verified_at');
             $table->index('name');
             $table->index(['username', 'id', 'name', 'phone_verified_at'], 'idx_users_search_covering');
         });
 
-        // Create cache tables
         Schema::create('cache', function (Blueprint $table) {
             $table->string('key')->primary();
             $table->mediumText('value');
@@ -52,7 +50,6 @@ return new class extends Migration
             $table->integer('expiration');
         });
 
-        // Create jobs tables
         Schema::create('jobs', function (Blueprint $table) {
             $table->id();
             $table->string('queue')->index();
@@ -61,8 +58,7 @@ return new class extends Migration
             $table->unsignedInteger('reserved_at')->nullable();
             $table->unsignedInteger('available_at');
             $table->unsignedInteger('created_at');
-            
-            // Indexes
+
             $table->index(['queue', 'available_at']);
             $table->index('reserved_at');
         });
@@ -88,12 +84,10 @@ return new class extends Migration
             $table->longText('payload');
             $table->longText('exception');
             $table->timestamp('failed_at')->useCurrent();
-            
-            // Index
+
             $table->index('failed_at');
         });
 
-        // Create personal access tokens
         Schema::create('personal_access_tokens', function (Blueprint $table) {
             $table->id();
             $table->morphs('tokenable');
@@ -103,32 +97,29 @@ return new class extends Migration
             $table->timestamp('last_used_at')->nullable();
             $table->timestamp('expires_at')->nullable();
             $table->timestamps();
-            
-            // Indexes
+
             $table->index('expires_at');
             $table->index('last_used_at');
         });
 
-        // Create verification code tables
         Schema::create('phone_verification_codes', function (Blueprint $table) {
-            $table->string('phone', 20)->primary();
+            $table->string('phone_hash', 64)->primary();
             $table->string('code', 6);
             $table->integer('attempts')->default(0);
             $table->timestamp('created_at')->nullable();
-            
+
             $table->index('created_at');
         });
 
         Schema::create('login_verification_codes', function (Blueprint $table) {
-            $table->string('phone', 20)->primary();
+            $table->string('phone_hash', 64)->primary();
             $table->string('code', 6);
             $table->integer('attempts')->default(0);
             $table->timestamp('created_at')->nullable();
-            
+
             $table->index('created_at');
         });
 
-        // Create sessions table
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();
@@ -136,8 +127,7 @@ return new class extends Migration
             $table->text('user_agent')->nullable();
             $table->longText('payload');
             $table->integer('last_activity')->index();
-            
-            // Foreign key
+
             if (config('database.connections.' . config('database.default') . '.foreign_key_constraints', true)) {
                 $table->foreign('user_id')
                     ->references('id')
@@ -145,7 +135,6 @@ return new class extends Migration
                     ->onDelete('cascade');
             }
         });
-
     }
 
     /**

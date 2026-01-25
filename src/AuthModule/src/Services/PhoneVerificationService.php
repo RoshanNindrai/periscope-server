@@ -44,8 +44,9 @@ final class PhoneVerificationService
             return ['state' => AuthResponseState::PHONE_ALREADY_VERIFIED, 'user' => $user];
         }
 
+        $phoneHash = $this->phoneHasher->hash($phone);
         $repo = $this->codeRepoFactory->forPhone();
-        $record = $repo->find($phone);
+        $record = $repo->find($phoneHash);
 
         if ($record === null) {
             throw new AuthModuleException(AuthErrorCode::INVALID_VERIFICATION_CODE);
@@ -53,7 +54,7 @@ final class PhoneVerificationService
 
         $createdAt = Carbon::parse($record->created_at);
         if (now()->diffInMinutes($createdAt) > AuthModuleConstants::CODE_EXPIRY_MINUTES) {
-            $repo->delete($phone);
+            $repo->delete($phoneHash);
             throw new AuthModuleException(AuthErrorCode::EXPIRED_VERIFICATION_CODE);
         }
 
@@ -62,7 +63,7 @@ final class PhoneVerificationService
         }
 
         if (!hash_equals($record->code, $code)) {
-            $repo->incrementAttempts($phone);
+            $repo->incrementAttempts($phoneHash);
             throw new AuthModuleException(AuthErrorCode::INVALID_VERIFICATION_CODE);
         }
 
@@ -70,7 +71,7 @@ final class PhoneVerificationService
             throw new AuthModuleException(AuthErrorCode::UNABLE_TO_VERIFY_PHONE);
         }
 
-        $repo->delete($phone);
+        $repo->delete($phoneHash);
 
         return ['state' => AuthResponseState::PHONE_VERIFIED, 'user' => $user->fresh()];
     }
@@ -87,10 +88,11 @@ final class PhoneVerificationService
             return AuthResponseState::PHONE_ALREADY_VERIFIED;
         }
 
+        $phoneHash = $this->phoneHasher->hash($user->phone);
         $code = $this->codeGenerator->generate();
         $repo = $this->codeRepoFactory->forPhone();
-        $repo->delete($user->phone);
-        $repo->store($user->phone, $code);
+        $repo->delete($phoneHash);
+        $repo->store($phoneHash, $code);
 
         try {
             $user->notify(new VerifyPhoneNotification($code));

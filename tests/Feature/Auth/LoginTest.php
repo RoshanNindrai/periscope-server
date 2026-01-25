@@ -24,7 +24,7 @@ class LoginTest extends TestCase
         User::factory()->create(['phone' => '+447911123459']);
         $r = $this->postJson('/api/login', ['phone' => '+447911123459']);
         $r->assertStatus(200)->assertJsonPath('status', 'LOGIN_CODE_SENT');
-        $this->assertDatabaseHas('login_verification_codes', ['phone' => '+447911123459']);
+        $this->assertDatabaseHas('login_verification_codes', ['phone_hash' => hash('sha256', '+447911123459')]);
     }
 
     public function test_login_send_otp_returns_error_when_user_not_found(): void
@@ -43,7 +43,7 @@ class LoginTest extends TestCase
     {
         $user = User::factory()->create(['phone' => '+447911123461']);
         $this->postJson('/api/login', ['phone' => '+447911123461']);
-        $code = DB::table('login_verification_codes')->where('phone', '+447911123461')->value('code');
+        $code = DB::table('login_verification_codes')->where('phone_hash', hash('sha256', '+447911123461'))->value('code');
 
         $r = $this->postJson('/api/verify-login', [
             'phone' => '+447911123461',

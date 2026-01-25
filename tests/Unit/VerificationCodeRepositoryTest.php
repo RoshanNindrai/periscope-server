@@ -16,11 +16,17 @@ class VerificationCodeRepositoryTest extends TestCase
         return new VerificationCodeRepository(AuthModuleConstants::TABLE_LOGIN_VERIFICATION_CODES);
     }
 
+    private function phoneHash(string $phone): string
+    {
+        return hash(AuthModuleConstants::PHONE_HASH_ALGO, $phone);
+    }
+
     public function test_store_and_find(): void
     {
         $repo = $this->repo();
-        $repo->store('+15555551234', '123456');
-        $record = $repo->find('+15555551234');
+        $hash = $this->phoneHash('+15555551234');
+        $repo->store($hash, '123456');
+        $record = $repo->find($hash);
         $this->assertNotNull($record);
         $this->assertSame('123456', $record->code);
         $this->assertSame(0, (int) $record->attempts);
@@ -28,24 +34,26 @@ class VerificationCodeRepositoryTest extends TestCase
 
     public function test_find_returns_null_when_missing(): void
     {
-        $this->assertNull($this->repo()->find('+15555559999'));
+        $this->assertNull($this->repo()->find($this->phoneHash('+15555559999')));
     }
 
     public function test_delete_removes_record(): void
     {
         $repo = $this->repo();
-        $repo->store('+15555551234', '123456');
-        $repo->delete('+15555551234');
-        $this->assertNull($repo->find('+15555551234'));
+        $hash = $this->phoneHash('+15555551234');
+        $repo->store($hash, '123456');
+        $repo->delete($hash);
+        $this->assertNull($repo->find($hash));
     }
 
     public function test_increment_attempts(): void
     {
         $repo = $this->repo();
-        $repo->store('+15555551234', '123456');
-        $repo->incrementAttempts('+15555551234');
-        $repo->incrementAttempts('+15555551234');
-        $record = $repo->find('+15555551234');
+        $hash = $this->phoneHash('+15555551234');
+        $repo->store($hash, '123456');
+        $repo->incrementAttempts($hash);
+        $repo->incrementAttempts($hash);
+        $record = $repo->find($hash);
         $this->assertSame(2, (int) $record->attempts);
     }
 }
