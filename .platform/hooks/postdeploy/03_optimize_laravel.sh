@@ -2,20 +2,16 @@
 # Optimize Laravel after app is in /var/app/current
 set -euo pipefail
 
-echo "Optimizing Laravel in /var/app/current..."
-
 cd /var/app/current
 
-# Clear any cached files from staging
-rm -f bootstrap/cache/config.php
-rm -f bootstrap/cache/routes-*.php
-rm -f bootstrap/cache/services.php
+# Storage and bootstrap/cache must be writable by webapp (and by artisan when run via sudo -u webapp)
+mkdir -p storage/logs storage/framework/cache storage/framework/sessions storage/framework/views storage/app/public
+chown -R webapp:webapp storage bootstrap/cache
+chmod -R 775 storage bootstrap/cache
+touch storage/logs/laravel.log
+chown webapp:webapp storage/logs/laravel.log
 
-# Clear Laravel caches
+rm -f bootstrap/cache/config.php bootstrap/cache/routes-*.php bootstrap/cache/services.php
 sudo -u webapp php artisan config:clear || true
 sudo -u webapp php artisan cache:clear || true
-
-# Regenerate config cache with correct /var/app/current paths
 sudo -u webapp php artisan config:cache || echo 'Config cache failed'
-
-echo "Laravel optimization complete"
