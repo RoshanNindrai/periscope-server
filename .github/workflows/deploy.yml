@@ -47,7 +47,9 @@ jobs:
         run: |
           zip -r deploy.zip . \
             -x "*.git*" \
-            -x "*.env*" \
+            -x ".env" \
+            -x ".env.backup" \
+            -x ".env.production" \
             -x "node_modules/*" \
             -x "vendor/*" \
             -x "storage/logs/*" \
