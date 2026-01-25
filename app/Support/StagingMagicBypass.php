@@ -14,7 +14,12 @@ final class StagingMagicBypass implements StagingMagicBypassInterface
             return false;
         }
 
-        $magic = config('staging-bypass.features.' . $feature);
+        $envKey = config('staging-bypass.features.' . $feature);
+        if ($envKey === null || $envKey === '') {
+            return false;
+        }
+
+        $magic = env($envKey);
         return is_string($magic) && $magic !== '' && hash_equals($magic, $providedValue);
     }
 }

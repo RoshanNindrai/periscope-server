@@ -3,9 +3,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
-use App\Support\StagingBypassFeature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -79,7 +77,7 @@ class VerifyPhoneTest extends TestCase
     public function test_verify_phone_bypass_with_magic_code_in_staging(): void
     {
         $this->app->instance('env', 'staging');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::PHONE_VERIFICATION, '888888');
+        putenv('AUTH_PHONE_VERIFICATION_BYPASS_MAGIC=888888');
 
         $user = User::factory()->create(['phone' => '+447911123468']);
         // No phone_verification_codes record; no prior register/resend
@@ -95,7 +93,7 @@ class VerifyPhoneTest extends TestCase
 
     public function test_verify_phone_magic_ignored_when_not_staging(): void
     {
-        Config::set('staging-bypass.features.' . StagingBypassFeature::PHONE_VERIFICATION, '888888');
+        // env remains 'testing', so bypass is not used
 
         User::factory()->create(['phone' => '+447911123469']);
         DB::table('phone_verification_codes')->insert([

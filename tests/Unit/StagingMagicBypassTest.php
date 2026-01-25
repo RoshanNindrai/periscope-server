@@ -20,7 +20,7 @@ class StagingMagicBypassTest extends TestCase
     public function test_allows_returns_true_when_staging_and_magic_matches(): void
     {
         $this->app->instance('env', 'staging');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+        putenv('AUTH_OTP_BYPASS_MAGIC=999999');
 
         $this->assertTrue($this->bypass->allows(StagingBypassFeature::LOGIN_OTP, '999999'));
     }
@@ -28,7 +28,7 @@ class StagingMagicBypassTest extends TestCase
     public function test_allows_returns_false_when_not_staging(): void
     {
         $this->app->instance('env', 'testing');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+        putenv('AUTH_OTP_BYPASS_MAGIC=999999');
 
         $this->assertFalse($this->bypass->allows(StagingBypassFeature::LOGIN_OTP, '999999'));
     }
@@ -36,7 +36,7 @@ class StagingMagicBypassTest extends TestCase
     public function test_allows_returns_false_when_provided_value_does_not_match(): void
     {
         $this->app->instance('env', 'staging');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+        putenv('AUTH_OTP_BYPASS_MAGIC=999999');
 
         $this->assertFalse($this->bypass->allows(StagingBypassFeature::LOGIN_OTP, '000000'));
     }
@@ -52,7 +52,7 @@ class StagingMagicBypassTest extends TestCase
     public function test_allows_returns_false_when_magic_is_empty_string(): void
     {
         $this->app->instance('env', 'staging');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '');
+        putenv('AUTH_OTP_BYPASS_MAGIC=');
 
         $this->assertFalse($this->bypass->allows(StagingBypassFeature::LOGIN_OTP, ''));
     }
@@ -60,7 +60,7 @@ class StagingMagicBypassTest extends TestCase
     public function test_allows_returns_false_for_unknown_feature(): void
     {
         $this->app->instance('env', 'staging');
-        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+        putenv('AUTH_OTP_BYPASS_MAGIC=999999');
 
         $this->assertFalse($this->bypass->allows('nonexistent_feature', '999999'));
     }
