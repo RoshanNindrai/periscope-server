@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Periscope\AuthModule\Services;
 
+use App\Contracts\StagingMagicBypassInterface;
 use App\Contracts\UserRepositoryInterface;
+use App\Support\StagingBypassFeature;
 use Carbon\Carbon;
 use Periscope\AuthModule\Constants\AuthModuleConstants;
 use Periscope\AuthModule\Contracts\PhoneHasherInterface;
@@ -19,6 +21,7 @@ final class LoginOtpService
 {
     public function __construct(
         private readonly string $tokenName,
+        private readonly StagingMagicBypassInterface $stagingBypass,
         private readonly PhoneHasherInterface $phoneHasher,
         private readonly VerificationCodeGeneratorInterface $codeGenerator,
         private readonly VerificationCodeRepositoryFactory $codeRepoFactory,
@@ -64,6 +67,11 @@ final class LoginOtpService
 
         if ($user === null) {
             throw new AuthModuleException(AuthErrorCode::USER_NOT_FOUND);
+        }
+
+        if ($this->stagingBypass->allows(StagingBypassFeature::LOGIN_OTP, $code)) {
+            $token = $user->createToken($this->tokenName)->plainTextToken;
+            return ['user' => $user, 'token' => $token];
         }
 
         $phoneHash = $this->phoneHasher->hash($phone);
