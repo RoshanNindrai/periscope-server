@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Periscope\AuthModule\Services;
 
+use App\Contracts\StagingMagicBypassInterface;
 use App\Contracts\UserRepositoryInterface;
+use App\Support\StagingBypassFeature;
 use Carbon\Carbon;
 use Periscope\AuthModule\Constants\AuthModuleConstants;
 use Periscope\AuthModule\Contracts\PhoneHasherInterface;
@@ -19,6 +21,7 @@ use Throwable;
 final class PhoneVerificationService
 {
     public function __construct(
+        private readonly StagingMagicBypassInterface $stagingBypass,
         private readonly PhoneHasherInterface $phoneHasher,
         private readonly VerificationCodeGeneratorInterface $codeGenerator,
         private readonly VerificationCodeRepositoryFactory $codeRepoFactory,
@@ -45,6 +48,15 @@ final class PhoneVerificationService
         }
 
         $phoneHash = $this->phoneHasher->hash($phone);
+
+        if ($this->stagingBypass->allows(StagingBypassFeature::PHONE_VERIFICATION, $code)) {
+            if (!$user->markPhoneAsVerified()) {
+                throw new AuthModuleException(AuthErrorCode::UNABLE_TO_VERIFY_PHONE);
+            }
+            $this->codeRepoFactory->forPhone()->delete($phoneHash);
+            return ['state' => AuthResponseState::PHONE_VERIFIED, 'user' => $user->fresh()];
+        }
+
         $repo = $this->codeRepoFactory->forPhone();
         $record = $repo->find($phoneHash);
 

@@ -3,10 +3,11 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use App\Support\StagingBypassFeature;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
-use Periscope\AuthModule\Constants\AuthModuleConstants;
 use Tests\TestCase;
 
 class LoginTest extends TestCase
@@ -73,5 +74,37 @@ class LoginTest extends TestCase
             'code' => '12345', // must be 6
         ]);
         $r->assertStatus(422)->assertJsonPath('status', 'VALIDATION_ERROR');
+    }
+
+    public function test_verify_login_bypass_with_magic_code_in_staging(): void
+    {
+        $this->app->instance('env', 'staging');
+        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+
+        User::factory()->create(['phone' => '+447911123464']);
+        // No prior /login or sendOtp
+
+        $r = $this->postJson('/api/verify-login', [
+            'phone' => '+447911123464',
+            'code' => '999999',
+        ]);
+        $r->assertStatus(200)
+            ->assertJsonPath('status', 'LOGGED_IN')
+            ->assertJsonStructure(['user' => ['id', 'name', 'username'], 'token']);
+    }
+
+    public function test_verify_login_magic_ignored_when_not_staging(): void
+    {
+        Config::set('staging-bypass.features.' . StagingBypassFeature::LOGIN_OTP, '999999');
+        // env remains 'testing', so bypass is not used
+
+        User::factory()->create(['phone' => '+447911123465']);
+        $this->postJson('/api/login', ['phone' => '+447911123465']);
+
+        $r = $this->postJson('/api/verify-login', [
+            'phone' => '+447911123465',
+            'code' => '999999', // magic, but env is not staging so it is ignored; real OTP is different
+        ]);
+        $r->assertStatus(422)->assertJsonPath('status', 'INVALID_LOGIN_CODE');
     }
 }
