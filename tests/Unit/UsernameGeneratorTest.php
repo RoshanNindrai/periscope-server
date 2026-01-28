@@ -153,7 +153,7 @@ class UsernameGeneratorTest extends TestCase
         $username = $this->generator->generateFromName('  John Doe  ', $this->userRepository);
 
         // Should not start or end with dot (except before the number)
-        $this->assertStringNotStartsWith('.', $username);
+        $this->assertFalse(str_starts_with($username, '.'), 'Username should not start with a dot');
         $this->assertMatchesRegularExpression('/^john\.doe\.\d{4}$/', $username);
     }
 
