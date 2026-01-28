@@ -54,10 +54,10 @@ final class UserRepository implements UserRepositoryInterface
         $query = $this->modelClass::query()
             ->where(fn ($q) => $q
                 ->where('username', 'like', $normalized . '%')
-                ->orWhere('name', 'like', $term . '%'))
+                ->orWhere('name', 'like', $normalized . '%'))
             ->orderByRaw(
                 'CASE WHEN username LIKE ? THEN 1 WHEN name LIKE ? THEN 2 ELSE 3 END',
-                [$normalized . '%', $term . '%']
+                [$normalized . '%', $normalized . '%']
             )
             ->orderBy('username');
 
