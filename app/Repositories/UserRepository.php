@@ -32,6 +32,11 @@ final class UserRepository implements UserRepositoryInterface
         return $this->modelClass::where('phone_hash', $phoneHash)->exists();
     }
 
+    public function existsByUsername(string $username): bool
+    {
+        return $this->modelClass::where('username', $username)->exists();
+    }
+
     public function findByUsernameExact(string $username, array $select = []): ?User
     {
         $query = $this->modelClass::where('username', $username);

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Log;
 use Periscope\AuthModule\Contracts\PhoneHasherInterface;
 use Periscope\AuthModule\Contracts\VerificationCodeGeneratorInterface;
 use Periscope\AuthModule\Notifications\VerifyPhoneNotification;
+use Periscope\AuthModule\Support\UsernameGenerator;
 use Periscope\AuthModule\Support\VerificationCodeRepositoryFactory;
 use Throwable;
 
@@ -21,10 +22,11 @@ final class RegistrationService
         private readonly VerificationCodeGeneratorInterface $codeGenerator,
         private readonly VerificationCodeRepositoryFactory $codeRepoFactory,
         private readonly UserRepositoryInterface $userRepository,
+        private readonly UsernameGenerator $usernameGenerator,
     ) {}
 
     /**
-     * @param  array{name: string, username: string, phone: string}  $validated
+     * @param  array{name: string, username?: string, phone: string}  $validated
      * @return array{user: \Illuminate\Contracts\Auth\Authenticatable, token: string}
      *
      * @throws Throwable
@@ -33,11 +35,20 @@ final class RegistrationService
     {
         $phone = phone($validated['phone'])->formatE164();
 
+        // Generate username if not provided
+        $username = $validated['username'] ?? null;
+        if (empty($username)) {
+            $username = $this->usernameGenerator->generateFromName(
+                $validated['name'],
+                $this->userRepository
+            );
+        }
+
         DB::beginTransaction();
         try {
             $user = $this->userRepository->create([
                 'name' => $validated['name'],
-                'username' => $validated['username'],
+                'username' => $username,
                 'phone' => $phone,
             ]);
 

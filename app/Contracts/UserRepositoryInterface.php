@@ -10,13 +10,15 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 interface UserRepositoryInterface
 {
     /**
-     * @param  array{name: string, username: string, phone: string}  $attributes
+     * @param  array{name: string, username?: string, phone: string}  $attributes
      */
     public function create(array $attributes): User;
 
     public function findByPhoneHash(string $phoneHash): ?User;
 
     public function existsByPhoneHash(string $phoneHash): bool;
+
+    public function existsByUsername(string $username): bool;
 
     /**
      * @param  list<string>  $select
