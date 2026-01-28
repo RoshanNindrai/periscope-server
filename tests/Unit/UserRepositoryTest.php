@@ -54,6 +54,13 @@ class UserRepositoryTest extends TestCase
         $this->assertFalse($this->repo->existsByPhoneHash(hash('sha256', '+15555553333')));
     }
 
+    public function test_exists_by_username(): void
+    {
+        User::factory()->create(['username' => 'existinguser']);
+        $this->assertTrue($this->repo->existsByUsername('existinguser'));
+        $this->assertFalse($this->repo->existsByUsername('nonexistentuser'));
+    }
+
     public function test_find_by_username_exact(): void
     {
         User::factory()->create(['username' => 'alice']);

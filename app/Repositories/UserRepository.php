@@ -32,6 +32,11 @@ final class UserRepository implements UserRepositoryInterface
         return $this->modelClass::where('phone_hash', $phoneHash)->exists();
     }
 
+    public function existsByUsername(string $username): bool
+    {
+        return $this->modelClass::where('username', $username)->exists();
+    }
+
     public function findByUsernameExact(string $username, array $select = []): ?User
     {
         $query = $this->modelClass::where('username', $username);
@@ -49,10 +54,10 @@ final class UserRepository implements UserRepositoryInterface
         $query = $this->modelClass::query()
             ->where(fn ($q) => $q
                 ->where('username', 'like', $normalized . '%')
-                ->orWhere('name', 'like', $term . '%'))
+                ->orWhere('name', 'like', $normalized . '%'))
             ->orderByRaw(
                 'CASE WHEN username LIKE ? THEN 1 WHEN name LIKE ? THEN 2 ELSE 3 END',
-                [$normalized . '%', $term . '%']
+                [$normalized . '%', $normalized . '%']
             )
             ->orderBy('username');
 
